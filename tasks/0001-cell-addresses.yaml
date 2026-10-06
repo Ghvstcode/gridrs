@@ -1,0 +1,94 @@
+spec_version: 1
+id: 0001-cell-addresses
+title: "A1 addressing: column letters, cells, $-references, ranges"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0001-cell-addresses. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement A1-style cell addressing in `src/addr.rs`. The file already contains
+  every function as a documented stub (`todo!()`); replace the bodies.
+
+  Types you work with (defined in src/types.rs, do not change them):
+  `CellRef { row, col }` (both ZERO-based; `CellRef::new(col, row)`),
+  `Reference { cell, abs_col, abs_row }`, `Range { start, end }` (`Range::new`
+  normalises any two corners), and the limits `MAX_COLS = 16384` (last column
+  `XFD`) and `MAX_ROWS = 1048576`.
+
+  Functions
+
+    col_to_letters(col: u32) -> String
+      Bijective base-26, upper case: 0 -> "A", 25 -> "Z", 26 -> "AA", 701 -> "ZZ",
+      702 -> "AAA", 16383 -> "XFD". Only called with col < MAX_COLS, but must not
+      panic for larger values (any sensible output).
+
+    letters_to_col(s: &str) -> Option<u32>
+      Inverse, ASCII case-insensitive ("aa" -> 26). None when `s` is empty,
+      contains anything but ASCII letters, or names a column >= MAX_COLS
+      ("XFE", "ZZZZ"). Must not overflow on absurdly long input.
+
+    parse_cell(s: &str) -> Option<CellRef>
+      One or more ASCII letters followed by one or more ASCII digits, nothing
+      else: "B12" -> CellRef::new(1, 11). Letters are case-insensitive. The row
+      number is 1..=MAX_ROWS with no leading zero ("A0", "A01", "A1048577" are
+      None). No `$`, no whitespace, no sign, no range. Must not overflow on a
+      very long digit string.
+
+    parse_reference(s: &str) -> Option<Reference>
+      Like parse_cell but with an optional `$` immediately before the letters
+      (abs_col) and/or immediately before the digits (abs_row):
+      "B12", "$B12", "B$12", "$B$12". Anything else is None ("$$A1", "A1$", "$1").
+
+    parse_range(s: &str) -> Option<Range>
+      Either a single cell ("C3" -> a one-cell range) or exactly two cells
+      joined by one `:` ("A1:B7"). The result is normalised with Range::new, so
+      "B7:A1" and "B1:A7" are the same range as "A1:B7". No `$`, no whitespace.
+
+    format_cell(cell: CellRef) -> String              "B12"
+    format_reference(r: Reference) -> String          "$B12", "B$12", "$B$12", "B12"
+    format_range(range: Range) -> String              "A1:B7"; a one-cell range prints as "A1"
+
+  Formatting always produces upper-case letters, and parsing what you formatted
+  gives back the same value.
+
+  Rules
+    - You may change ONLY the file `src/addr.rs`, plus the marker file ci/done/0001-cell-addresses
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0001-cell-addresses
+    2. Run the check that will judge your work:      sh ci/check.sh 0001-cell-addresses
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0001_cell_addresses.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0001_cell_addresses`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/addr.rs
+    - ci/done/0001-cell-addresses
+verify: sh ci/check.sh 0001-cell-addresses
+max_tokens: 1500000
+timeout_minutes: 20
+depends_on: []

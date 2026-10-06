@@ -1,0 +1,97 @@
+spec_version: 1
+id: 0302-csv
+title: CSV reader and writer (RFC 4180)
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0302-csv. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement CSV reading and writing in `src/io/csv.rs`. Pure text <-> records;
+  no files, no spreadsheet types.
+
+    pub fn parse(text: &str) -> Result<Vec<Vec<String>>, CsvError>
+    pub fn write(rows: &[Vec<String>]) -> String
+
+  `CsvError { line: usize, message: String }` is in src/types.rs (do not change
+  it). `line` is 1-based and counts PHYSICAL lines, i.e. every `\n` seen so far,
+  including those inside quoted fields. `message` is for humans.
+
+  parse (RFC 4180, lenient where the RFC is silent)
+    - If the text starts with a byte-order mark (U+FEFF), drop it. Only there.
+    - Fields are separated by `,`. Records are separated by `\n` or `\r\n`. A
+      `\r` that is not immediately followed by `\n` is ordinary data.
+    - A field is QUOTED only if its very first character is `"`. Inside a
+      quoted field `""` is one literal quote and everything else, including
+      commas, `\n` and `\r\n`, is data, kept verbatim. After the closing quote
+      the next thing must be `,`, a record separator, or the end of the text;
+      anything else is an error reported at the current line.
+    - Reaching the end of the text inside a quoted field is an error; report
+      the line on which that field STARTED.
+    - In an unquoted field every character up to the next `,` or record
+      separator is data, verbatim: whitespace is kept, and a `"` that is not
+      the first character is a literal quote (`5" pipe`, ` "x"`).
+    - Records may have different numbers of fields; do not pad.
+    - The record separator at the very end of the text is optional and does
+      not start another record: "a\n" and "a" are both one record. Apart from
+      that, every line is a record, and an empty line is a record with ONE
+      empty field: "a\n\nb\n" is [["a"], [""], ["b"]], "\n" is [[""]],
+      "a\n\n" is [["a"], [""]].
+    - Empty text (or only a BOM) is zero records.
+
+  write
+    - Each record is its fields joined by `,` and terminated by `\n` (LF, also
+      after the last record: gridrs reads CRLF but writes LF, on purpose, so
+      files diff cleanly). Zero records is the empty string.
+    - A field is written inside quotes, with each `"` doubled, if and only if
+      it contains `,`, `"`, `\n` or `\r`. Everything else is written as is
+      (leading/trailing spaces, tabs, `;`, `'`, a leading `=` are all fine
+      unquoted).
+    - Do not pad or trim records.
+
+  Round trip: for any records in which no record is an empty Vec, and the first
+  field of the first record does not start with U+FEFF,
+  `parse(&write(&rows)) == Ok(rows)`.
+
+  No panics on any input.
+
+  Rules
+    - You may change ONLY the file `src/io/csv.rs`, plus the marker file ci/done/0302-csv
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0302-csv
+    2. Run the check that will judge your work:      sh ci/check.sh 0302-csv
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0302_csv.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0302_csv`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/io/csv.rs
+    - ci/done/0302-csv
+verify: sh ci/check.sh 0302-csv
+max_tokens: 2000000
+timeout_minutes: 25
+depends_on: []

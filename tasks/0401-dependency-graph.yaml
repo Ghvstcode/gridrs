@@ -1,0 +1,121 @@
+spec_version: 1
+id: 0401-dependency-graph
+title: "Dependency graph: recalculation order and cycle detection"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0401-dependency-graph. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the spreadsheet dependency graph in `src/depgraph.rs`: given which
+  ranges each formula cell reads, answer "this cell changed; what must be
+  recalculated, in what order, and what is stuck in a cycle?".
+
+  `DepGraph` is declared in the file with a placeholder field; its private
+  fields are yours to design. It must stay `Debug + Clone + Default`. `CellRef`,
+  `Range` (inclusive rectangle, `contains`, `Range::single`) and `RecalcPlan
+  { order: Vec<CellRef>, cyclic: Vec<CellRef> }` are in src/types.rs (do not
+  change them). `CellRef` is `Ord` (row-major) and `Hash`.
+
+  Vocabulary: a FORMULA CELL is a cell with a non-empty precedent list. Cell F
+  READS cell X when one of F's precedent ranges contains X. The graph only
+  stores formula cells; everything else is a plain cell.
+
+    pub fn new() -> DepGraph
+
+    pub fn set_precedents(&mut self, cell: CellRef, ranges: Vec<Range>)
+      Declare (replacing any previous declaration) the ranges `cell` reads.
+      Stored exactly as given, duplicates and order included. An empty list is
+      the same as `remove(cell)`.
+
+    pub fn remove(&mut self, cell: CellRef)
+      `cell` is no longer a formula cell. Removing an unknown cell is fine.
+
+    pub fn precedents(&self, cell: CellRef) -> Vec<Range>
+      The list last declared for `cell`, exactly; empty for a plain cell.
+
+    pub fn dependents(&self, cell: CellRef) -> Vec<CellRef>
+      The formula cells that read `cell` DIRECTLY, each once, sorted ascending.
+
+    pub fn recalc_plan(&self, changed: &[CellRef]) -> RecalcPlan
+      `changed` lists cells whose content was just edited (any cells, in any
+      order, duplicates allowed).
+      - AFFECTED = every formula cell that is in `changed`, or reads (directly
+        or through any chain of formula cells) a cell in `changed`. A changed
+        cell that is not a formula cell is not itself affected.
+      - A formula cell is CYCLIC when it is on a dependency cycle (it reads
+        itself directly, e.g. A1 = A1+1 or A2 = SUM(A1:A3), or through other
+        formula cells), or when it reads, directly or indirectly, a cell that
+        is on a cycle. This is a property of the whole graph: an affected cell
+        can be cyclic because of a cycle that lies upstream of it and outside
+        the affected set.
+      - `plan.cyclic` = the affected cells that are cyclic, sorted ascending.
+      - `plan.order`  = the affected cells that are not cyclic, each exactly
+        once, in an order where every cell comes AFTER every other cell of
+        `order` that it reads. Any such topological order is accepted.
+      An empty graph, or nothing affected, gives `RecalcPlan::default()`.
+
+  Requirements that shape the design
+    - Ranges can be enormous (A1:A1048576 is one range). Never enumerate the
+      cells of a range; test membership with `Range::contains`.
+    - Depth: a chain of 20,000 formula cells (A2 = A1, A3 = A2, ...) must work.
+      Use explicit stacks/queues, not recursion.
+    - Speed: that same chain must plan in well under a second in a debug build.
+      A scan of every formula for every visited cell (quadratic) is too slow.
+      A design that works: index one-cell precedent ranges in a
+      `HashMap<CellRef, Vec<CellRef>>` (cell read -> readers) and keep the
+      formulas that have multi-cell ranges in a separate list that is scanned
+      with `contains`.
+    - One way to compute the plan: collect AFFECTED by a breadth-first walk
+      along "is read by" edges; extend it to the set N of AFFECTED plus every
+      formula cell that an N cell reads (walk upstream until closed); run
+      Kahn's algorithm on N (in-degree = number of distinct N cells a cell
+      reads). Whatever Kahn's algorithm cannot remove is on a cycle or
+      downstream of one. Emit the removed cells that are in AFFECTED as
+      `order`, the unremoved ones that are in AFFECTED as `cyclic`.
+      Finding which N cells a formula reads: for its one-cell ranges look them
+      up; for a multi-cell range test the members of N with `contains` (do not
+      enumerate the range).
+    - Deterministic output for the same sequence of calls is appreciated but
+      only the properties above are tested.
+
+  Rules
+    - You may change ONLY the file `src/depgraph.rs`, plus the marker file ci/done/0401-dependency-graph
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0401-dependency-graph
+    2. Run the check that will judge your work:      sh ci/check.sh 0401-dependency-graph
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0401_dependency_graph.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0401_dependency_graph`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/depgraph.rs
+    - ci/done/0401-dependency-graph
+verify: sh ci/check.sh 0401-dependency-graph
+max_tokens: 3000000
+timeout_minutes: 35
+depends_on: []

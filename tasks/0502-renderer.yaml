@@ -1,0 +1,166 @@
+spec_version: 1
+id: 0502-renderer
+title: "Renderer: viewport to ANSI frame"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0502-renderer. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the renderer in `src/tui/render.rs`: a pure function from "what is
+  on the sheet and where is the cursor" to the lines of a terminal frame. No
+  I/O, no global state; the acceptance test compares frames character by
+  character, so this specification is exact.
+
+    pub fn layout(grid: &dyn GridSource, ui: &Ui) -> Layout
+    pub fn render(grid: &dyn GridSource, ui: &Ui) -> Vec<String>
+    pub fn to_ansi(lines: &[String]) -> String
+    pub fn strip_ansi(s: &str) -> String
+
+  The constants REVERSE ("\x1b[7m"), BOLD ("\x1b[1m") and RESET ("\x1b[0m") are
+  already in the file. `GridSource { text(at), align(at), col_width(col) }`,
+  `Ui { width, height, top, left, cursor, bar, status, mode }`,
+  `Layout { gutter, rows, cols: Vec<ColSlot { col, x, width }> }`, `Align`,
+  `MAX_ROWS`, `MAX_COLS` are in src/types.rs (do not change them). Already
+  merged: `crate::addr::col_to_letters(col)` and `crate::addr::format_cell(cell)`.
+
+  Width is counted in characters (`chars().count()`); every character counts
+  as one terminal cell (no special handling of wide or combining characters).
+  SANITISING: before any text from outside (cell text, `ui.bar`, `ui.status`,
+  `ui.mode`) is measured or placed, replace each control character
+  (`char::is_control`) with one space. No escape sequence other than the three
+  constants may ever appear in the output.
+  `fit(s, w)`: s cut to its first w characters, then padded on the right with
+  spaces to exactly w characters.
+
+  A frame is `ui.height` lines of exactly `ui.width` visible characters:
+
+      line 0             formula bar
+      line 1             column header
+      lines 2..height-2  body: one line per sheet row, starting at row ui.top
+      line height-1      status line
+
+  layout
+    rows   = height - 3 (saturating at 0): the number of body lines.
+    gutter = the width reserved for row numbers
+           = max(3, number of decimal digits of (ui.top + rows)).
+    cols   : starting at column ui.left and x = gutter, repeatedly: let
+             w = max(1, grid.col_width(col)); if x + 1 + w > ui.width, or
+             col == MAX_COLS, stop; otherwise push
+             ColSlot { col, x: x + 1, width: w } and continue with col + 1,
+             x + 1 + w. So each column is preceded by one separator space, and
+             only columns that fit completely are shown (possibly none).
+
+  render (for height >= 3; see the end for tiny frames)
+    Formula bar: fit(format_cell(ui.cursor) + " | " + ui.bar, width). No styling.
+
+    Column header: `gutter` spaces; then for each ColSlot one space followed by
+    the column's letters centred in `width` characters. Centring a text of
+    length n in w: if n > w use its first w characters; otherwise put
+    (w - n) / 2 spaces (rounded down) on the left and the rest on the right.
+    The slot (its `width` characters, not the separator) of the cursor's column
+    is wrapped in BOLD ... RESET. Then spaces to the full width.
+
+    Body line for sheet row r = ui.top + i:
+    - if r >= MAX_ROWS: `width` spaces, nothing else.
+    - otherwise: the row number r + 1 right-aligned in `gutter` characters,
+      wrapped in BOLD ... RESET if r is the cursor's row; then for each ColSlot
+      one space followed by the cell's slot: the sanitised `grid.text(cell)`
+      fitted into `width` characters according to `grid.align(cell)`:
+        * it fits (length <= width): Left pads on the right; Right pads on the
+          left; Center as for the header (extra space on the right);
+        * it does not fit: Align::Right (numbers) shows `#` repeated `width`
+          times, like a spreadsheet; Left and Center show the first `width`
+          characters.
+      The slot of the cursor cell (cursor row AND cursor column) is wrapped in
+      REVERSE ... RESET: exactly the slot, not the separator. Then spaces to
+      the full width.
+
+    Status line: let mode = ui.mode (sanitised), m its length,
+    avail = width - m - 1 (saturating at 0). The visible text is
+    fit(fit(ui.status, avail) + " " + mode, width): message on the left, one
+    space, mode at the right edge; if the terminal is narrower than that, it is
+    simply cut. The whole line is wrapped in REVERSE ... RESET (also when it is
+    all spaces).
+
+    Styling is emitted exactly as: the constant, the text, RESET; nothing is
+    nested and unstyled text gets no escapes at all. A cursor outside the
+    visible rows/columns just means nothing is highlighted (its row number or
+    column letter is still bold if that row or column is visible).
+
+    If a styled or unstyled piece would extend past `width` (only possible for
+    the gutter on absurdly narrow terminals), cut the visible text at `width`;
+    every line must have exactly `width` visible characters for ANY width and
+    height, including 0. For height < 3 return exactly `height` lines of
+    `width` visible characters each; which of the parts above they show is up
+    to you.
+
+  The demo frame (40 x 8, top 0, left 0, cursor B2, bar "=1+2", status "ready",
+  mode "NORMAL", column widths A=6, B=8, others 10), visible text:
+
+      B2 | =1+2                               |
+            A       B         C               |
+        1 item   qty      price               |
+        2 apple         3       0.50          |
+        3 a very ########    TRUE             |
+        4        #DIV/0!  ##########          |
+        5                                     |
+      ready                             NORMAL|
+
+  (the `|` at the right only marks column 40 here; it is not part of the frame).
+  In it, "   B    " in the header and "  2" are bold, "       3" (B2) is
+  reverse video, and the status line is reverse video.
+
+  to_ansi
+    "\x1b[H" (cursor home), then the lines, each followed by "\x1b[K" (clear to
+    end of line), separated by "\r\n" (no "\r\n" after the last line).
+    `to_ansi(&[])` is "\x1b[H".
+
+  strip_ansi
+    Remove escape sequences, keep everything else (including "\r\n"):
+    - ESC `[` followed by parameter bytes 0x30..=0x3F, intermediate bytes
+      0x20..=0x2F and one final byte 0x40..=0x7E is removed as a whole; if the
+      text ends before the final byte, everything from the ESC on is removed;
+    - any other ESC is removed on its own (the character after it stays).
+
+  Rules
+    - You may change ONLY the file `src/tui/render.rs`, plus the marker file ci/done/0502-renderer
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0502-renderer
+    2. Run the check that will judge your work:      sh ci/check.sh 0502-renderer
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0502_renderer.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0502_renderer`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/tui/render.rs
+    - ci/done/0502-renderer
+verify: sh ci/check.sh 0502-renderer
+max_tokens: 3000000
+timeout_minutes: 35
+depends_on:
+  - 0001-cell-addresses

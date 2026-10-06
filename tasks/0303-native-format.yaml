@@ -1,0 +1,122 @@
+spec_version: 1
+id: 0303-native-format
+title: "Native .grid file format: encode and decode"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0303-native-format. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement gridrs's native file format in `src/io/native.rs`: a line-oriented
+  text format that, unlike CSV, also keeps number formats and column widths,
+  and diffs well in git.
+
+    pub fn encode(doc: &Document) -> String
+    pub fn decode(text: &str) -> Result<Document, String>
+
+  `Document { cells: Vec<(CellRef, String)>, formats: Vec<(CellRef, NumFormat)>,
+  col_widths: Vec<(u32, usize)> }` is in src/types.rs (do not change it).
+  This task is a pure codec between `Document` and text: no files, no Sheet.
+
+  Already available:
+    crate::addr::{parse_cell, format_cell, letters_to_col, col_to_letters}  (merged)
+    NumFormat::parse("fixed 2") -> Option<NumFormat>, and `{}` Display printing
+    the same spelling: "general", "fixed 2", "thousands 0", "percent 1"
+    MIN_COL_WIDTH (1), MAX_COL_WIDTH (60) in crate::types
+
+  The format, version 1. Example:
+
+      gridrs 1
+      width A 18
+      cell A1 Item
+      cell B2 =SUM(B3:B9)
+      cell A3 two\nlines
+      format B2 thousands 2
+
+    Line 1 is exactly `gridrs 1`. Then any number of lines, each one of:
+      width <COLUMN LETTERS> <N>      column width, MIN_COL_WIDTH <= N <= MAX_COL_WIDTH
+      cell <ADDRESS> <ESCAPED TEXT>   a cell's input, exactly as the user typed it
+      format <ADDRESS> <SPEC>         a number format, SPEC as NumFormat::parse takes it
+    Fields are separated by exactly one space. In a `cell` line the text is
+    EVERYTHING after the single space that follows the address, up to the end of
+    the line, so leading and trailing spaces of the input survive.
+
+    Escaping of cell text (the only three escapes):
+      backslash -> `\\`       newline (U+000A) -> `\n`       carriage return (U+000D) -> `\r`
+    Every other character, including tabs, `#` and any Unicode, is written raw.
+
+  encode
+    `gridrs 1`, then one `width` line per entry of `col_widths`, then one `cell`
+    line per entry of `cells`, then one `format` line per entry of `formats`;
+    each section in the order given (do not sort, do not deduplicate, do not
+    drop anything). Addresses and column letters in upper case. Every line ends
+    with `\n`. An empty document is "gridrs 1\n".
+
+  decode
+    Split the text at `\n`; drop one trailing `\r` from each line (so CRLF files
+    load); a final line without `\n` is fine. Lines are numbered from 1.
+    - Line 1 must be exactly `gridrs 1` (after dropping the `\r`). If it is not
+      (including empty text) the error is `line 1: ...`.
+    - After that, lines that are empty or start with `#` are ignored (comments);
+      this applies to whole lines only (`cell A7 # not a comment` is a cell).
+    - Directives are lower case and case-sensitive; lines are not trimmed (a
+      leading space is an error). Addresses and column letters are accepted in
+      either case (use parse_cell / letters_to_col).
+    - `width`: exactly two fields; a valid column; N a plain decimal integer
+      within MIN_COL_WIDTH..=MAX_COL_WIDTH.
+    - `cell`: `cell <addr>` with nothing after it, or with a single space and
+      nothing after it, is a cell with empty text. A backslash followed by
+      anything other than `\`, `n` or `r`, or a backslash at the end of the
+      line, is an error.
+    - `format`: everything after the address (and its single space) must be
+      accepted by NumFormat::parse; `format A1 general` is allowed.
+    - Entries are appended to the three vectors in the order they appear,
+      whatever the order of lines in the file (sections may be interleaved).
+    - Any other line is an error.
+    Every error message starts with `line N: ` where N is the 1-based number
+    of the offending line, followed by a short description, on one line.
+
+  Round trip: `decode(&encode(&doc)) == Ok(doc)` for every document whose
+  widths are within MIN_COL_WIDTH..=MAX_COL_WIDTH.
+
+  Rules
+    - You may change ONLY the file `src/io/native.rs`, plus the marker file ci/done/0303-native-format
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0303-native-format
+    2. Run the check that will judge your work:      sh ci/check.sh 0303-native-format
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0303_native_format.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0303_native_format`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/io/native.rs
+    - ci/done/0303-native-format
+verify: sh ci/check.sh 0303-native-format
+max_tokens: 2000000
+timeout_minutes: 25
+depends_on:
+  - 0001-cell-addresses

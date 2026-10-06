@@ -1,0 +1,122 @@
+spec_version: 1
+id: 0202-funcs-logic
+title: "Functions: IF AND OR NOT IFERROR, IS-checks, NA, WHOPAID"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0202-funcs-logic. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the logic and information function family in `src/funcs/logic.rs`:
+
+    pub fn call(name: &str, args: &[Arg]) -> Option<Value>
+
+  for exactly these names: IF AND OR NOT IFERROR ISBLANK ISNUMBER ISTEXT
+  ISERROR NA WHOPAID. The dispatcher in src/funcs/mod.rs already routes to this
+  function; the stub returns `None` for everything.
+
+  Conventions shared by every function family (follow them exactly):
+    - `call` receives the function name already in ASCII upper case. Return
+      `None` for any name that is not in the list above (exact match only: not
+      for "sum", not for "SUMX"), `Some(value)` otherwise.
+    - Arguments are `Arg::Value(Value)` (a scalar: a literal, a single cell, a
+      computed result; a reference to an empty cell is `Value::Empty`; a failed
+      computation is `Value::Error(_)`) or `Arg::Range(Grid)` (rows x cols
+      values, row-major in `grid.cells`).
+    - Wrong number of arguments -> `Value::Error(ErrorKind::Value)`.
+    - "Scalar argument" below means: an `Arg::Range` there is
+      `ErrorKind::Value`; an `Arg::Value(Error(e))` returns `e`; arguments are
+      checked left to right and the first problem wins.
+    - Coercions come from crate::value (already implemented and merged):
+      to_number / to_text / to_bool (each returns Err(ErrorKind) to return as
+      the function's result), compare, round_to, number_to_text.
+    - Any numeric result that is not finite -> ErrorKind::Num.
+    - No panics on any input (huge or negative counts, empty grids, NaN-free
+      arithmetic).
+
+  The evaluator is eager: by the time you are called every argument has already
+  been evaluated, and errors arrive as values. That is why IF and IFERROR can
+  simply pick an argument.
+
+  IF(condition, then [, else])        2 or 3 arguments
+    `condition` is a scalar argument coerced with to_bool (an error or a failed
+    coercion is the result). Return the chosen branch's value exactly as it is:
+    it may be Empty, it may be an Error. The branch that is NOT chosen is never
+    inspected (it may be an error or even a range). A missing `else` is
+    `Value::Bool(false)`. If the chosen branch is an `Arg::Range`, the result is
+    ErrorKind::Value.
+
+  AND(...), OR(...)                   1 or more arguments
+    Gather booleans by walking the arguments left to right, ranges row-major:
+      in a range:        Bool counts; Number counts (non-zero is true); Text
+                         and Empty cells are SKIPPED (even the text "TRUE");
+                         an Error cell is returned.
+      a scalar argument: Empty is skipped; otherwise to_bool (so "true" counts,
+                         "maybe" is ErrorKind::Value; an Error is returned).
+    There is NO short-circuit: every argument is inspected and the first error
+    met in the walk is the result, even if an earlier value already decided
+    the answer. If no boolean was gathered at all -> ErrorKind::Value.
+    Otherwise AND is true when all are true, OR when any is.
+
+  NOT(x)                              1 scalar argument, to_bool, negated.
+
+  IFERROR(value, fallback)            exactly 2 arguments
+    If `value` is an `Arg::Range` -> ErrorKind::Value. If it is
+    `Arg::Value(Error(_))` return `fallback`'s value as it is (even if that is
+    itself an error; a range fallback is ErrorKind::Value). Otherwise return
+    `value`'s value unchanged (Empty stays Empty) without looking at `fallback`.
+
+  ISBLANK(x), ISNUMBER(x), ISTEXT(x), ISERROR(x)     exactly 1 argument
+    An `Arg::Range` is ErrorKind::Value. Otherwise a Bool, and these never
+    propagate an error: ISBLANK is true only for Value::Empty (not for ""),
+    ISNUMBER only for Number, ISTEXT only for Text (including ""), ISERROR only
+    for Error.
+
+  NA()                                0 arguments -> Value::Error(ErrorKind::NA)
+
+  WHOPAID()                           0 arguments -> exactly this text:
+    Nobody. Strangers' spare tokens wrote this, one signed task at a time.
+    (This spreadsheet was funded by donated agent runs; it is the one joke in
+    the function library. Keep the string byte-for-byte.)
+
+  Rules
+    - You may change ONLY the file `src/funcs/logic.rs`, plus the marker file ci/done/0202-funcs-logic
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0202-funcs-logic
+    2. Run the check that will judge your work:      sh ci/check.sh 0202-funcs-logic
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0202_funcs_logic.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0202_funcs_logic`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/funcs/logic.rs
+    - ci/done/0202-funcs-logic
+verify: sh ci/check.sh 0202-funcs-logic
+max_tokens: 2000000
+timeout_minutes: 25
+depends_on:
+  - 0002-values

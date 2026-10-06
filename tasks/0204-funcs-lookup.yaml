@@ -1,0 +1,127 @@
+spec_version: 1
+id: 0204-funcs-lookup
+title: "Functions: VLOOKUP INDEX MATCH"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0204-funcs-lookup. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the lookup function family in `src/funcs/lookup.rs`:
+
+    pub fn call(name: &str, args: &[Arg]) -> Option<Value>
+
+  for exactly these names: VLOOKUP INDEX MATCH. The dispatcher in
+  src/funcs/mod.rs already routes to this function; the stub returns `None` for
+  everything.
+
+  Conventions shared by every function family (follow them exactly):
+    - `call` receives the function name already in ASCII upper case. Return
+      `None` for any name that is not in the list above (exact match only: not
+      for "sum", not for "SUMX"), `Some(value)` otherwise.
+    - Arguments are `Arg::Value(Value)` (a scalar: a literal, a single cell, a
+      computed result; a reference to an empty cell is `Value::Empty`; a failed
+      computation is `Value::Error(_)`) or `Arg::Range(Grid)` (rows x cols
+      values, row-major in `grid.cells`).
+    - Wrong number of arguments -> `Value::Error(ErrorKind::Value)`.
+    - "Scalar argument" below means: an `Arg::Range` there is
+      `ErrorKind::Value`; an `Arg::Value(Error(e))` returns `e`; arguments are
+      checked left to right and the first problem wins.
+    - Coercions come from crate::value (already implemented and merged):
+      to_number / to_text / to_bool (each returns Err(ErrorKind) to return as
+      the function's result), compare, round_to, number_to_text.
+    - Any numeric result that is not finite -> ErrorKind::Num.
+    - No panics on any input (huge or negative counts, empty grids, NaN-free
+      arithmetic).
+
+  Matching (shared by VLOOKUP and MATCH). A key and a candidate cell can only
+  match when they are the SAME KIND: Number with Number, Text with Text, Bool
+  with Bool. There is no coercion (the text "1" never matches the number 1),
+  an Empty cell and an Error cell never match anything, and an Empty key
+  matches nothing. Within a kind use `crate::value::compare` (text is
+  case-insensitive; numbers compare at 15 significant digits).
+  Three search modes over a sequence of candidate cells in order:
+    exact       the FIRST candidate that is the same kind and compares Equal
+    ascending   the LAST candidate that is the same kind and compares <= key
+                (the data is assumed sorted ascending, but do not rely on it:
+                scan everything and keep the last candidate that qualifies)
+    descending  the LAST candidate that is the same kind and compares >= key
+  No candidate qualifies -> ErrorKind::NA.
+  An "index argument" is a scalar argument converted with to_number and
+  truncated toward zero (2.9 -> 2). Index values can be as large as 1e300;
+  compare before converting to usize.
+
+  VLOOKUP(key, table, col_index [, range_lookup])       3 or 4 arguments
+    Validate in this order, returning at the first problem:
+      key          scalar argument (an Error key is returned)
+      table        must be an `Arg::Range`, otherwise ErrorKind::Value
+      col_index    index argument; < 1 -> ErrorKind::Value;
+                   > table.cols -> ErrorKind::Ref (checked before searching)
+      range_lookup scalar argument, to_bool; defaults to TRUE
+    Search the FIRST column of the table top to bottom: `exact` when
+    range_lookup is false, `ascending` when true. Return the value in column
+    `col_index` (1-based) of the row found, exactly as it is (Empty stays
+    Empty, an Error cell is returned as that error).
+
+  INDEX(range, row [, col])                              2 or 3 arguments
+    `range` must be an `Arg::Range`, otherwise ErrorKind::Value. `row` and
+    `col` are index arguments (checked in that order).
+    With 3 arguments: row < 1 or col < 1 -> ErrorKind::Value; row > rows or
+    col > cols -> ErrorKind::Ref; else the value at (row, col), 1-based, as is.
+    With 2 arguments: if the range has exactly one row, the index selects the
+    COLUMN (INDEX(A1:C1, 3) is C1); otherwise it selects the row and the column
+    is 1. Same bounds rules.
+
+  MATCH(key, range [, match_type])                       2 or 3 arguments
+    Validate in this order: `key` scalar argument; `range` must be an
+    `Arg::Range` (else ErrorKind::Value); `match_type` scalar argument,
+    to_number, defaults to 1.
+    The range must be one-dimensional (a single row or a single column; a 1x1
+    range is fine). A range with more than one row AND more than one column
+    -> ErrorKind::NA.
+    match_type == 0 -> exact; > 0 -> ascending; < 0 -> descending.
+    Returns the 1-based position within the range as a Number.
+
+  So the classic works: INDEX(prices, MATCH("cherry", names, 0)).
+
+  Rules
+    - You may change ONLY the file `src/funcs/lookup.rs`, plus the marker file ci/done/0204-funcs-lookup
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0204-funcs-lookup
+    2. Run the check that will judge your work:      sh ci/check.sh 0204-funcs-lookup
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0204_funcs_lookup.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0204_funcs_lookup`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/funcs/lookup.rs
+    - ci/done/0204-funcs-lookup
+verify: sh ci/check.sh 0204-funcs-lookup
+max_tokens: 2500000
+timeout_minutes: 30
+depends_on:
+  - 0002-values

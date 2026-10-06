@@ -1,0 +1,153 @@
+spec_version: 1
+id: 0102-formula-parser
+title: Formula parser and printer with Excel precedence
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0102-formula-parser. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the formula parser in `src/formula/parser.rs` and its inverse, the
+  printer, in `src/formula/print.rs`:
+
+    pub fn parse(src: &str) -> Result<Expr, FormulaError>      // parser.rs
+    pub fn to_string(expr: &Expr) -> String                    // print.rs
+
+  Already implemented and merged, use them:
+    crate::formula::lexer::tokenize(src) -> Result<Vec<Token>, FormulaError>
+    crate::addr::parse_reference(&str) -> Option<Reference>    ("$B12")
+    crate::addr::format_reference(Reference) -> String
+  `Expr`, `UnaryOp`, `BinaryOp`, `Token`, `FormulaError` are in src/types.rs
+  (do not change them).
+
+  PARSER
+
+  Tokenise, then parse the whole token list as one expression. If the FIRST
+  token is `Eq` it is skipped ("=1+2" and "1+2" parse the same; "==1" is an
+  error). Any leftover token after the expression is an error; so is empty input.
+
+  Grammar, loosest binding first. ALL binary operators are left-associative.
+
+    comparison := concat   ( ( "=" | "<>" | "<" | "<=" | ">" | ">=" ) concat )*
+    concat     := additive ( "&" additive )*
+    additive   := term     ( ( "+" | "-" ) term )*
+    term       := power    ( ( "*" | "/" ) power )*
+    power      := unary    ( "^" unary )*
+    unary      := ( "-" | "+" ) unary  |  postfix
+    postfix    := primary ( "%" )*
+    primary    := Number | Text | Error
+                | "(" comparison ")"
+                | Ident "(" [ comparison ( "," comparison )* ] ")"     function call
+                | Ident [ ":" Ident ]                                  cell or range, TRUE/FALSE
+
+  This is Excel's precedence, including its two famous quirks, on purpose:
+    - unary minus binds tighter than `^`:  -2^2  is  (-2)^2      = 4
+    - `^` is left-associative:             2^3^2 is  (2^3)^2     = 64
+  Also: "2^-2" is Pow(2, Neg(2)); "-50%" is Neg(Percent(50)); "50%%" is
+  Percent(Percent(50)); "1&2=3" is Eq(Concat(1,2),3).
+
+  Tree shapes: Number/Text/Error tokens become Expr::Number/Text/Error;
+  `-x` -> Unary(Neg, x), `+x` -> Unary(Pos, x), `x%` -> Unary(Percent, x);
+  `a+b` -> Binary(Add, a, b) and so on (Sub, Mul, Div, Pow, Concat, Eq, Ne, Lt,
+  Le, Gt, Ge). Parentheses leave no node of their own.
+
+  Identifiers, in this order:
+    1. Followed by `(`: a function call -> Expr::Call(NAME, args) with the name
+       converted to ASCII upper case. This wins even when the name looks like a
+       cell or a boolean ("LOG10(100)", "A1(2)", "true()" are calls). Zero
+       arguments are fine ("PI()"). An empty argument is an error: "F(,1)",
+       "F(1,)", "F(1,,2)".
+    2. Equal to TRUE or FALSE ignoring ASCII case -> Expr::Bool.
+    3. `parse_reference(ident)` succeeds -> a cell. If the next token is `:`,
+       it must be followed by another identifier that is also a reference (and
+       is not itself followed by `(`), giving Expr::Range(first, second) with
+       the endpoints EXACTLY as written (not normalised: "B7:A1" stays
+       Range(B7, A1)). Otherwise Expr::Ref(reference).
+    4. Anything else is an error: "foo", "A0", "XFE1", "A1048577", "SUM 1".
+  A `:` anywhere else is an error ("(A1):B2", "A1:2", "A1:B2:C3").
+
+  Do not recurse without bound on hostile input in a way that crashes on
+  ordinary formulas: 200 nested parentheses or 200 leading minus signs must
+  parse.
+
+  PRINTER
+
+  `to_string` prints canonical formula text WITHOUT a leading `=`, with no
+  spaces, using the fewest parentheses such that parsing the output gives back
+  exactly the same tree. For every tree t that `parse` can produce:
+  `parse(&to_string(&t)) == Ok(t)`.
+
+    Number(n)        Rust's `{}` Display of the f64 ("1.5", "1000" for 1e3,
+                     "0.0000001" for 1e-7; never an exponent). Numbers in trees
+                     are non-negative; you need not handle anything else specially.
+    Text(s)          `"` + s with every `"` doubled + `"`
+    Bool             TRUE / FALSE
+    Error(e)         e.as_str(), e.g. #DIV/0!
+    Ref(r)           addr::format_reference(r), e.g. $A$1
+    Range(a, b)      format_reference(a) + ":" + format_reference(b), as written
+    Call(name, args) name + "(" + args joined by "," + ")"; arguments never
+                     need parentheses
+    Unary(Neg, x)    "-" + x        Unary(Pos, x)  "+" + x
+    Unary(Percent,x) x + "%"
+    Binary(op, a, b) a + operator + b   (operators: + - * / ^ & = <> < <= > >=)
+
+  Parentheses: give every node a binding level, matching the grammar:
+    comparison 1, concat 2, additive 3, term 4, power 5, prefix unary (Neg/Pos) 6,
+    postfix (Percent) 7, everything else (literals, refs, ranges, calls) 8.
+    - Binary at level L: parenthesise the LEFT operand if its level < L, the
+      RIGHT operand if its level <= L (that is what left-associativity means:
+      "1-(2-3)" keeps its parentheses, "(1-2)-3" prints as "1-2-3").
+    - Neg/Pos: parenthesise the operand if its level < 6 ("-(1+2)", "-(2^2)";
+      but "--1" and "-2%" need none).
+    - Percent: parenthesise the operand if its level < 7 ("(1+2)%", "(-2)%",
+      "(2^2)%"; but "2%%").
+    Note what falls out: Binary(Pow, Neg(2), 2) prints as "-2^2", and
+    Unary(Neg, Binary(Pow, 2, 2)) prints as "-(2^2)".
+
+  Examples: parse("sum( a1:b2 , 3 )") prints as "SUM(A1:B2,3)";
+  parse("1+(2*3)") as "1+2*3"; parse("(1+2)*3") as "(1+2)*3";
+  parse("IF((A1>0),(1+2),(3))") as "IF(A1>0,1+2,3)".
+
+  Rules
+    - You may change ONLY the files `src/formula/parser.rs` and `src/formula/print.rs`, plus the marker file ci/done/0102-formula-parser
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0102-formula-parser
+    2. Run the check that will judge your work:      sh ci/check.sh 0102-formula-parser
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0102_formula_parser.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0102_formula_parser`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/formula/parser.rs
+    - src/formula/print.rs
+    - ci/done/0102-formula-parser
+verify: sh ci/check.sh 0102-formula-parser
+max_tokens: 3500000
+timeout_minutes: 40
+depends_on:
+  - 0001-cell-addresses
+  - 0101-formula-lexer

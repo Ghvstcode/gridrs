@@ -1,0 +1,117 @@
+spec_version: 1
+id: 0404-files
+title: "Load and save sheets: CSV import/export and the native format"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0404-files. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the bridge between `Sheet` and files in `src/io/files.rs`. The
+  codecs already exist; this task connects them to the sheet and to the disk.
+
+  Already implemented and merged, use them:
+    crate::io::csv::parse(&str) -> Result<Vec<Vec<String>>, CsvError>   (CsvError: Display gives "line N: ...")
+    crate::io::csv::write(&[Vec<String>]) -> String
+    crate::io::native::encode(&Document) -> String
+    crate::io::native::decode(&str) -> Result<Document, String>          (errors start "line N: ")
+    crate::numfmt::format_value(&Value, NumFormat) -> String             the text a cell displays
+    Sheet: new(), apply(&[(CellRef, String)]), input(at), value(at), cells(),
+           used_range(), format(at), set_format, formats(), set_col_width,
+           col_widths()
+  Types are in src/types.rs (do not change them): `Document { cells, formats,
+  col_widths }`, `CsvMode { Inputs, Values }`, `FileKind { Csv, Native }`.
+
+    kind_for_path(path: &str) -> FileKind
+      Take the file name: the text after the last `/` or `\` in the path (the
+      whole path if it has neither). If it ends with ".grid", compared ASCII
+      case-insensitively, the kind is Native; otherwise Csv. So "a.b.GRID" is
+      Native; "budget", "grid", "x.grid.csv" and "dir.grid/budget" are Csv.
+
+    sheet_from_csv(text: &str) -> Result<Sheet, String>
+      Parse with csv::parse (on error return its Display text, which contains
+      "line N"). The field at record r, position c (both from 0) becomes the
+      input of cell (col c, row r), exactly as if the user had typed it: so
+      numbers are numbers, `=A1+B1` is a live formula, `'007` is text. Empty
+      fields set nothing. Use one `apply` call.
+
+    sheet_to_csv(sheet: &Sheet, mode: CsvMode) -> String
+      An empty sheet (no inputs) is "". Otherwise a rectangle of records that
+      always starts at A1 and extends to the bottom-right corner of
+      `used_range()`: every record has the same number of fields, empty cells
+      are empty fields. Per cell:
+        CsvMode::Inputs -> `sheet.input(at)`                (lossless)
+        CsvMode::Values -> `format_value(&sheet.value(at), sheet.format(at))`
+                           (what the user sees: "1,300.50", "30.1%", "#DIV/0!")
+      Written with csv::write. Build the records from `cells()`; do not call
+      input()/value() for every cell of a huge, sparse rectangle more than you
+      must (a rectangle up to the used range is fine).
+
+    sheet_to_document(sheet: &Sheet) -> Document
+      `cells` = sheet.cells(), `formats` = sheet.formats(), `col_widths` =
+      sheet.col_widths(), unchanged (already in canonical order).
+
+    sheet_from_document(doc: &Document) -> Sheet
+      A new sheet with every cell input applied (in order, later entries for
+      the same cell win, empty inputs are harmless), every format set, every
+      column width set (Sheet clamps widths itself). Must not panic on odd but
+      decodable documents (duplicates, General formats, out-of-range widths).
+
+    load(path: &str) -> Result<Sheet, String>
+      Read the file as UTF-8 text and build a sheet according to
+      kind_for_path. Every failure (cannot read, not UTF-8, syntax error) is
+      returned as ONE line of the form `<path>: <reason>`: the path exactly as
+      given, then the reason (for syntax errors the codec's own message, so it
+      contains "line N").
+
+    save(sheet: &Sheet, path: &str) -> Result<(), String>
+      Write the sheet according to kind_for_path: Native -> encode of
+      sheet_to_document; Csv -> sheet_to_csv with CsvMode::Inputs (a CSV file
+      stores what was typed, so formulas survive a round trip; other
+      spreadsheets evaluate them too). Overwrites an existing file. Errors as
+      in `load`: one line, `<path>: <reason>`.
+
+  Rules
+    - You may change ONLY the file `src/io/files.rs`, plus the marker file ci/done/0404-files
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0404-files
+    2. Run the check that will judge your work:      sh ci/check.sh 0404-files
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0404_files.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0404_files`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/io/files.rs
+    - ci/done/0404-files
+verify: sh ci/check.sh 0404-files
+max_tokens: 2500000
+timeout_minutes: 30
+depends_on:
+  - 0301-number-format
+  - 0302-csv
+  - 0303-native-format
+  - 0402-sheet

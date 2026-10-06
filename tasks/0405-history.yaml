@@ -1,0 +1,94 @@
+spec_version: 1
+id: 0405-history
+title: Undo/redo history
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0405-history. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement undo/redo in `src/history.rs` as a generic, bounded history of
+  snapshots. It knows nothing about spreadsheets: the editor will use
+  `History<Sheet>`, the acceptance test uses `History<i32>` and
+  `History<String>`.
+
+  `History<T>` is declared with a placeholder field; its private fields are
+  yours to design (two stacks is the natural shape). Keep the
+  `#[derive(Debug, Clone)]`. Methods must not require any trait bound on `T`
+  beyond what the stub already says (plain `impl<T> History<T>`): no `T: Clone`,
+  no `T: Default`.
+
+  The protocol, from the editor's point of view: before changing its state it
+  calls `record(state_before)`. To undo it calls `undo(current_state)` and, if
+  it gets `Some(previous)`, makes that its state. Redo is the mirror image.
+
+    new(limit: usize) -> History<T>
+      Remembers at most `limit` undo steps. `limit == 0` is allowed and means
+      nothing is ever remembered.
+
+    record(&mut self, before: T)
+      Push `before` as the newest undo step and CLEAR the redo stack (a new
+      edit after an undo discards the undone future). If there are now more
+      than `limit` undo steps, drop the OLDEST ones.
+
+    undo(&mut self, current: T) -> Option<T>
+      If there is no undo step: return None and change nothing (`current` is
+      simply dropped; in particular it is not pushed anywhere). Otherwise pop
+      the newest undo step, push `current` onto the redo stack, and return the
+      popped state.
+
+    redo(&mut self, current: T) -> Option<T>
+      If there is nothing to redo: return None and change nothing. Otherwise
+      pop the newest redo step, push `current` onto the undo stack, and return
+      the popped state. (Redo can only restore steps that undo removed, so
+      this never exceeds the limit.)
+
+    can_undo(&self) -> bool, can_redo(&self) -> bool
+
+    clear(&mut self)
+      Forget all undo and redo steps; the limit stays.
+
+  Dropping the oldest step must be cheap when the history is full and edits
+  keep coming (5,000 records into a history of 1,000 is routine): use a
+  `VecDeque`, not `Vec::remove(0)` in a loop over a large vector.
+
+  Rules
+    - You may change ONLY the file `src/history.rs`, plus the marker file ci/done/0405-history
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0405-history
+    2. Run the check that will judge your work:      sh ci/check.sh 0405-history
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0405_history.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0405_history`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/history.rs
+    - ci/done/0405-history
+verify: sh ci/check.sh 0405-history
+max_tokens: 1500000
+timeout_minutes: 20
+depends_on: []

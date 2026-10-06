@@ -1,0 +1,163 @@
+spec_version: 1
+id: 0602-cli
+title: Command line, --eval, --dump and the interactive event loop
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0602-cli. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Finish gridrs: implement the command line in `src/cli.rs` and the interactive
+  loop in `src/tui/event_loop.rs`. `src/main.rs` already calls
+  `gridrs::cli::run(args, stdout, stderr)` and exits with its return value;
+  do not change it. This is the last task: everything else is merged, and the
+  acceptance test runs the real binary end to end.
+
+  Already implemented and merged, use them:
+    crate::io::files::load(path) -> Result<Sheet, String>      error is one line: "<path>: <reason>"
+    crate::sheet::Sheet (new(); implements crate::types::Context)
+    crate::formula::parser::parse(&str) -> Result<Expr, FormulaError>   accepts a leading `=`
+    crate::formula::eval::eval(&Expr, &dyn Context) -> Value
+    crate::numfmt::format_value(&Value, NumFormat) -> String
+    crate::app::App: new(sheet, path: Option<String>), resize(width, height),
+          frame() -> Vec<String>, handle_key(Key) -> Outcome
+    crate::tui::keys::decode(bytes, flush: bool) -> (Vec<Key>, usize)
+    crate::tui::render::{to_ansi(&[String]) -> String, strip_ansi(&str) -> String}
+    crate::tui::term::{SystemStty, RawMode::enter(stty) -> io::Result<RawMode<_>>,
+          RawMode::leave(), terminal_size(&mut dyn Stty) -> (rows, cols),
+          ENTER_SCREEN, LEAVE_SCREEN}
+  `CliAction`, `Outcome`, `NumFormat` are in src/types.rs (do not change them).
+
+  parse_args(args: &[String]) -> Result<CliAction, String>     (args exclude the program name)
+    Scan left to right:
+      --help, -h           help requested
+      --version, -V        version requested
+      --eval F, -e F       the NEXT argument, whatever it looks like (even
+                           "-1" or "--help"), is a formula; repeatable, order kept
+      --dump               dump requested
+      --size WxH           the next argument is the frame size for --dump: two
+                           plain decimal integers joined by a lower-case `x`,
+                           each 1..=1000 ("40x8")
+      --                   every later argument is a file name, even if it
+                           starts with `-`
+      anything else starting with `-` (and longer than "-")   unknown option
+      anything else        a file name; at most one is allowed
+    Decide after the scan, in this order:
+      1. help requested                        -> Ok(CliAction::Help)  (even if other arguments were wrong)
+      2. version requested                     -> Ok(CliAction::Version)
+      3. any problem found during the scan     -> Err: unknown option (the
+         message must contain the option as typed), a second file name, a
+         missing value after --eval/-e or --size, a malformed size
+      4. --dump together with --eval           -> Err
+      5. --size without --dump                 -> Err
+      6. --dump                                -> the file is required (else Err):
+                                                  Ok(Dump { file, width, height }), size default 80 x 24
+      7. one or more formulas                  -> Ok(Eval { file, formulas })
+      8. otherwise                             -> Ok(Open { file })
+    Error messages are one line, no newline, never empty.
+
+  run(args, stdout, stderr) -> i32     the process exit code
+    parse_args error      stderr: "gridrs: <message>\n" then
+                          "Try 'gridrs --help' for more information.\n"; return 2.
+    Help                  stdout: a usage text whose first line starts with
+                          "Usage:" and which documents FILE, --eval/-e, --dump,
+                          --size, --version and --help; return 0.
+    Version               stdout: "gridrs " + env!("CARGO_PKG_VERSION") + "\n"; return 0.
+    Eval { file, formulas }
+                          The sheet is files::load(file) if a file was given
+                          (on Err(e): stderr "gridrs: <e>\n", return 1, print
+                          nothing to stdout) or an empty sheet. For each
+                          formula in order print ONE line to stdout:
+                          parse(formula) then eval(&expr, &sheet), shown with
+                          format_value(&value, NumFormat::General); a formula
+                          that does not parse prints "#NAME?". Error values are
+                          ordinary output. Return 0. The sheet is not modified.
+    Dump { file, width, height }
+                          files::load(file) (error handling as for Eval).
+                          App::new(sheet, Some(file)); resize(width, height);
+                          take frame(); print each line through strip_ansi,
+                          with trailing spaces removed, followed by "\n".
+                          Return 0. Never emits an escape sequence.
+    Open { file }         The interactive editor.
+                          1. The sheet: no file -> empty; a file that exists
+                             (std::path::Path::exists) -> files::load (on error:
+                             stderr "gridrs: <e>\n", return 1); a file that
+                             does not exist yet -> empty sheet, to be created
+                             by :w. The App gets the path either way.
+                          2. RawMode::enter(SystemStty). If it fails: stderr
+                             "gridrs: not a terminal (try --eval or --dump)\n",
+                             return 1. Nothing may have been written to stdout
+                             before this point.
+                          3. terminal_size -> (rows, cols); app.resize(cols, rows).
+                          4. Write ENTER_SCREEN to stdout, run
+                             event_loop::run(&mut app, &mut stdin, stdout),
+                             write LEAVE_SCREEN, flush, leave raw mode (also on
+                             error paths: the terminal must always be restored).
+                          5. Return 0, or 1 with "gridrs: <io error>\n" on
+                             stderr if the loop failed.
+    Write errors on stdout/stderr may be ignored (do not panic on a closed pipe).
+
+  event_loop::run(app, input, output) -> io::Result<()>
+    1. Draw: write to_ansi(&app.frame()) to `output` and flush.
+    2. Loop: read from `input` into a buffer of at least 1024 bytes.
+         - Ok(0) (end of input): return Ok(()).
+         - Err of kind Interrupted: retry. Any other Err: return it.
+         - Ok(n): decode(&buf[..n], true) (flush = true: each read is treated
+           as complete, which is what makes a lone ESC key work; terminals
+           deliver an escape sequence in one piece). Feed the keys to
+           app.handle_key in order; if one returns Outcome::Quit, return Ok(())
+           IMMEDIATELY (no further keys, no redraw, no further read).
+           After the chunk's keys, draw as in step 1.
+    Write and flush errors are returned.
+
+  Rules
+    - You may change ONLY the files `src/cli.rs` and `src/tui/event_loop.rs`, plus the marker file ci/done/0602-cli
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0602-cli
+    2. Run the check that will judge your work:      sh ci/check.sh 0602-cli
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0602_cli.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0602_cli`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/cli.rs
+    - src/tui/event_loop.rs
+    - ci/done/0602-cli
+verify: sh ci/check.sh 0602-cli
+max_tokens: 3500000
+timeout_minutes: 45
+depends_on:
+  - 0102-formula-parser
+  - 0104-evaluator
+  - 0202-funcs-logic
+  - 0203-funcs-text
+  - 0204-funcs-lookup
+  - 0301-number-format
+  - 0404-files
+  - 0501-terminal-input
+  - 0502-renderer
+  - 0601-app

@@ -1,0 +1,152 @@
+spec_version: 1
+id: 0501-terminal-input
+title: "Terminal input: key decoding and raw mode via stty"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0501-terminal-input. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the input side of the terminal layer, with the standard library
+  only (no libc, no termios bindings): decoding raw bytes into keys
+  (`src/tui/keys.rs`) and switching the terminal to raw mode by running the
+  `stty` program (`src/tui/term.rs`). `Key` and the `Stty` trait are in
+  src/types.rs (do not change them).
+
+  PART 1 - src/tui/keys.rs
+
+    pub fn decode(bytes: &[u8], flush: bool) -> (Vec<Key>, usize)
+
+  Decode keys from the front of `bytes`; return them with the number of bytes
+  consumed. With `flush == false`, stop BEFORE an incomplete trailing sequence
+  and leave it unconsumed (the caller will append more bytes and call again).
+  With `flush == true` nothing more is coming: consume everything, resolving
+  incomplete tails as described. Never panic, for any bytes.
+
+  At each position:
+    0x0D or 0x0A              Key::Enter
+    0x09                      Key::Tab
+    0x7F or 0x08              Key::Backspace
+    0x01..=0x1A otherwise     Key::Ctrl(letter): 0x01 -> Ctrl('a'), 0x12 -> Ctrl('r')
+    0x00, 0x1C..=0x1F         ignored (consumed, no key)
+    0x20..=0x7E               Key::Char(that ASCII character)
+    0x1B (ESC)                see below
+    0x80..=0xFF               UTF-8: if a complete, valid encoding of one
+                              character starts here, Key::Char(it). If the bytes
+                              so far are a valid PREFIX of an encoding but the
+                              input ends first: incomplete tail (not flushing:
+                              stop here; flushing: drop those bytes). Otherwise
+                              the byte is invalid: skip that ONE byte and carry
+                              on at the next (so `C3 28` yields Char('('), and
+                              stray continuation bytes vanish).
+
+  ESC, looking at the byte after it:
+    nothing follows           not flushing: incomplete tail. Flushing: Key::Esc.
+    `[`                       a CSI sequence: ESC `[`, then any number of
+                              parameter bytes 0x30..=0x3F, then any number of
+                              intermediate bytes 0x20..=0x2F, then one final
+                              byte 0x40..=0x7E. If the input ends before the
+                              final byte: incomplete tail (flushing: dropped,
+                              no key). If a byte that fits none of these
+                              appears, the sequence is abandoned: drop what was
+                              read of it and continue decoding AT that byte.
+                              A complete sequence maps by its final byte:
+                                A Up   B Down   C Right   D Left   H Home   F End   Z BackTab
+                                ~  by the first parameter (the digits before
+                                   any `;`): 1 or 7 Home, 4 or 8 End, 3 Delete,
+                                   5 PageUp, 6 PageDown
+                              Parameters are otherwise ignored, so modifiers
+                              vanish: ESC[1;5C is Right, ESC[3;5~ is Delete.
+                              Every other complete sequence (function keys,
+                              ESC[200~, ESC[?25h, ESC[I, ...) is consumed and
+                              produces no key.
+    `O`                       SS3: ESC `O` plus ONE more byte. A Up, B Down,
+                              C Right, D Left, H Home, F End; any other byte:
+                              consumed, no key. Input ends after ESC `O`:
+                              incomplete tail (flushing: dropped).
+    anything else             Key::Esc, and decoding continues AT that byte
+                              (ESC ESC [ A is Esc, Up; ESC a is Esc, Char('a')).
+
+  Consequence to check yourself against: for any byte string and any split
+  point, decoding the first part with flush=false, then the leftover plus the
+  second part with flush=true, yields the same keys as decoding the whole
+  string with flush=true.
+
+  PART 2 - src/tui/term.rs
+
+  Constants ENTER_SCREEN / LEAVE_SCREEN are already there; keep them.
+
+    impl Stty for SystemStty { fn run(&mut self, args: &[&str]) -> io::Result<String> }
+      Run the `stty` program with these arguments, with standard input
+      INHERITED from this process (stty acts on the terminal on its stdin; do
+      not open /dev/tty) and stdout/stderr captured. Return stdout as a String
+      on exit status 0. A non-zero status, or failure to start the program, is
+      an `Err` (include stderr in the message). Must fail cleanly, not hang or
+      panic, when stdin is not a terminal.
+
+    RawMode<S: Stty>   (private fields are yours; it owns the `S`)
+      enter(mut stty: S) -> io::Result<RawMode<S>>
+        1. `stty.run(&["-g"])` -> the current settings in stty's own
+           re-loadable format. Trim surrounding whitespace and keep it. If this
+           fails return the error; run nothing else.
+        2. `stty.run(&["raw", "-echo"])` (exactly these two arguments in one
+           call). If this fails, put the saved settings back with
+           `stty.run(&[saved])` (ignore that result) and return the error.
+      leave(&mut self) -> io::Result<()>
+        Restore with `stty.run(&[saved])`: ONE argument, the saved string. Only
+        the first call does anything; later calls (and Drop after a leave)
+        return Ok(()) without running stty again, whether or not the first
+        attempt succeeded.
+      impl Drop: call `leave` and ignore the result (never panic in drop).
+        The stub has an empty `drop`; fill it in.
+
+    parse_size(output: &str) -> Option<(usize, usize)>
+      The output of `stty size`: two decimal integers separated by whitespace,
+      rows first then columns ("24 80\n" -> Some((24, 80))). Surrounding
+      whitespace is fine. Anything else is None: a missing or extra field,
+      non-digits, zero for either number, a number too large for usize.
+
+    terminal_size(stty: &mut dyn Stty) -> (usize, usize)
+      `stty.run(&["size"])` parsed with parse_size; (24, 80) if either step fails.
+
+  Rules
+    - You may change ONLY the files `src/tui/keys.rs` and `src/tui/term.rs`, plus the marker file ci/done/0501-terminal-input
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0501-terminal-input
+    2. Run the check that will judge your work:      sh ci/check.sh 0501-terminal-input
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0501_terminal_input.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0501_terminal_input`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/tui/keys.rs
+    - src/tui/term.rs
+    - ci/done/0501-terminal-input
+verify: sh ci/check.sh 0501-terminal-input
+max_tokens: 3000000
+timeout_minutes: 35
+depends_on: []

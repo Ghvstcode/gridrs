@@ -1,0 +1,101 @@
+spec_version: 1
+id: 0503-commands
+title: "Command-line parser for : commands"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0503-commands. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the parser for the editor's `:` commands in `src/command.rs`:
+
+    pub fn parse_command(line: &str) -> Result<Command, String>
+
+  `line` is what the user typed after the `:`. `Command` and `NumFormat` are in
+  src/types.rs (do not change them). Already merged:
+  `crate::addr::parse_cell("B12") -> Option<CellRef>` (case-insensitive, no `$`).
+  `NumFormat::parse("fixed 2")` exists in types.rs.
+
+  Parsing
+    Trim spaces (U+0020) from both ends of `line`. The COMMAND WORD is
+    everything up to the first space; the ARGUMENT is the rest with spaces
+    trimmed from both ends (it may contain spaces inside; it is "" when there
+    is nothing). Command words are lower case and case-sensitive.
+
+    word                argument            result
+    w                   optional file       Command::Write(None | Some(file))
+    q                   none                Command::Quit { force: false }
+    q!                  none                Command::Quit { force: true }
+    wq, x               optional file       Command::WriteQuit(None | Some(file))
+    e                   file, required      Command::Edit(file)
+    export              file, required      Command::Export(file)
+    goto                address, required   Command::Goto(cell)  via addr::parse_cell
+    insrow, ir          none                Command::InsertRow
+    delrow, dr          none                Command::DeleteRow
+    inscol, ic          none                Command::InsertCol
+    delcol, dc          none                Command::DeleteCol
+    fmt, format         spec, required      Command::Format(f): split the
+                                            argument on runs of spaces, re-join
+                                            with single spaces, NumFormat::parse
+    width               N, required         Command::Width(N): plain decimal
+                                            digits only, 1 <= N <= 60
+    undo, u             none                Command::Undo
+    redo                none                Command::Redo
+    help, h             none                Command::Help
+
+    A file argument is the whole argument, verbatim ("w my budget.csv" saves to
+    `my budget.csv`).
+    "none" means a non-empty argument is an error ("q now", "ir 3").
+
+    If the command word is not in the table: when the WHOLE trimmed line is a
+    cell address accepted by addr::parse_cell, the result is Command::Goto
+    (":B12" jumps to B12); otherwise it is an error.
+
+  Errors
+    Err(String): one short line for the status bar, no newline, never empty.
+    For an unknown command include the command word, e.g.
+    `unknown command: frobnicate`. Also errors: an empty line; a missing
+    required argument; an unparseable address, format or width; a width
+    outside 1..=60.
+
+  Rules
+    - You may change ONLY the file `src/command.rs`, plus the marker file ci/done/0503-commands
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0503-commands
+    2. Run the check that will judge your work:      sh ci/check.sh 0503-commands
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0503_commands.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0503_commands`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/command.rs
+    - ci/done/0503-commands
+verify: sh ci/check.sh 0503-commands
+max_tokens: 1500000
+timeout_minutes: 20
+depends_on:
+  - 0001-cell-addresses

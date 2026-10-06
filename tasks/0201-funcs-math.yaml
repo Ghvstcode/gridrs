@@ -1,0 +1,117 @@
+spec_version: 1
+id: 0201-funcs-math
+title: "Functions: SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT ABS ROUND INT MOD SQRT POWER"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0201-funcs-math. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the math function family in `src/funcs/math.rs`:
+
+    pub fn call(name: &str, args: &[Arg]) -> Option<Value>
+
+  for exactly these names: SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT ABS ROUND
+  INT MOD SQRT POWER. The dispatcher in src/funcs/mod.rs already routes to this
+  function; the stub returns `None` for everything.
+
+  Conventions shared by every function family (follow them exactly):
+    - `call` receives the function name already in ASCII upper case. Return
+      `None` for any name that is not in the list above (exact match only: not
+      for "sum", not for "SUMX"), `Some(value)` otherwise.
+    - Arguments are `Arg::Value(Value)` (a scalar: a literal, a single cell, a
+      computed result; a reference to an empty cell is `Value::Empty`; a failed
+      computation is `Value::Error(_)`) or `Arg::Range(Grid)` (rows x cols
+      values, row-major in `grid.cells`).
+    - Wrong number of arguments -> `Value::Error(ErrorKind::Value)`.
+    - "Scalar argument" below means: an `Arg::Range` there is
+      `ErrorKind::Value`; an `Arg::Value(Error(e))` returns `e`; arguments are
+      checked left to right and the first problem wins.
+    - Coercions come from crate::value (already implemented and merged):
+      to_number / to_text / to_bool (each returns Err(ErrorKind) to return as
+      the function's result), compare, round_to, number_to_text.
+    - Any numeric result that is not finite -> ErrorKind::Num.
+    - No panics on any input (huge or negative counts, empty grids, NaN-free
+      arithmetic).
+
+  Aggregates: SUM AVERAGE MIN MAX PRODUCT (one or more arguments of any kind)
+    Collect numbers by walking the arguments left to right, and each range in
+    row-major order:
+      in a range:        Number counts. Text, Bool and Empty cells are SKIPPED
+                         (even text that looks like a number). An Error cell
+                         stops everything: return that error.
+      a scalar argument: Empty is skipped. Number counts. Bool counts as 1/0.
+                         Text counts if `to_number` accepts it, otherwise the
+                         result is ErrorKind::Value. An Error is returned.
+    The first error met in that walk is the result. Otherwise:
+      SUM      the sum (0 if there were no numbers)
+      PRODUCT  the product (0 if there were no numbers, like Excel)
+      AVERAGE  sum / count; no numbers -> ErrorKind::Div0
+      MIN/MAX  the smallest/largest; no numbers -> 0
+
+  COUNT (one or more arguments)
+    How many numbers: Number cells in ranges; scalar Numbers, Bools, and Text
+    that `to_number` accepts. Everything else, INCLUDING errors, is silently not
+    counted. COUNT never returns an error (except for zero arguments).
+
+  COUNTA (one or more arguments)
+    How many values are not Empty: everything counts (text, "", booleans,
+    errors) except `Value::Empty`, in ranges and scalars alike.
+
+  Scalar functions (every argument is a scalar argument, coerced with to_number):
+    ABS(x)            absolute value
+    INT(x)            floor: INT(-2.1) is -3
+    SQRT(x)           x < 0 -> ErrorKind::Num
+    ROUND(x, digits)  `digits` is truncated toward zero to an integer and
+                      clamped into i32, then crate::value::round_to(x, digits)
+                      (decimal, half away from zero: ROUND(2.675, 2) = 2.68,
+                      ROUND(-2.5, 0) = -3, ROUND(1234.5678, -2) = 1200)
+    MOD(a, b)         b == 0 -> ErrorKind::Div0; otherwise a - b * floor(a / b),
+                      so the result has the sign of the divisor: MOD(-7, 3) = 2,
+                      MOD(7, -3) = -2
+    POWER(a, b)       a.powf(b); not finite -> ErrorKind::Num
+
+  A reference to an empty cell given to a scalar function reads as 0
+  (ABS(<empty>) = 0), because that is what to_number does.
+
+  Rules
+    - You may change ONLY the file `src/funcs/math.rs`, plus the marker file ci/done/0201-funcs-math
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0201-funcs-math
+    2. Run the check that will judge your work:      sh ci/check.sh 0201-funcs-math
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0201_funcs_math.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0201_funcs_math`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/funcs/math.rs
+    - ci/done/0201-funcs-math
+verify: sh ci/check.sh 0201-funcs-math
+max_tokens: 2500000
+timeout_minutes: 30
+depends_on:
+  - 0002-values

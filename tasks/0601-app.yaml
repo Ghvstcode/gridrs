@@ -1,0 +1,196 @@
+spec_version: 1
+id: 0601-app
+title: "The editor: modes, keys, commands, undo, clipboard, frames"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0601-app. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the editor in `src/app.rs`: a state machine that turns key presses
+  into sheet edits and renders frames. It performs no terminal I/O (the event
+  loop does that); the only I/O is loading and saving files through
+  `crate::io::files`. `App` is declared with a placeholder field; its private
+  fields are yours. Every method exists as a documented stub.
+
+  Already implemented and merged, use them:
+    Sheet (crate::sheet): Clone; set(at, &str), input(at), value(at),
+          format(at), set_format, col_width(col), set_col_width, used_range()
+    crate::ops::{copy(&Sheet, Range) -> Clip, paste(&mut Sheet, &Clip, CellRef),
+                 apply_structural(&mut Sheet, StructuralEdit)}
+    crate::history::History<T>: new(limit), record(before), undo(current) -> Option<T>,
+          redo(current) -> Option<T>, clear()
+    crate::io::files::{load(path) -> Result<Sheet, String>, save(&Sheet, path) -> Result<(), String>,
+          sheet_to_csv(&Sheet, CsvMode) -> String}
+    crate::command::parse_command(&str) -> Result<Command, String>
+    crate::numfmt::{format_value(&Value, NumFormat) -> String, align_of(&Value) -> Align}
+    crate::tui::render::{layout(&dyn GridSource, &Ui) -> Layout, render(&dyn GridSource, &Ui) -> Vec<String>}
+    crate::addr::format_cell(CellRef) -> String
+  Types are in src/types.rs (do not change them): Key, Mode, Outcome, Command,
+  Ui, Layout, GridSource, StructuralEdit, CsvMode, MAX_ROWS, MAX_COLS.
+
+  STATE
+    sheet; path: Option<String>; cursor (starts at A1); mode (starts Normal);
+    buffer: String (what is being typed in Edit or Command mode; always empty
+    in Normal); status: String (message from the last action, "" if none);
+    dirty: bool (starts false); history: History<Sheet> with limit 100;
+    clipboard: Option<Clip>; screen size (starts 80 x 24); viewport origin
+    (top row, left column; starts 0, 0).
+
+    Accessors return exactly this state: sheet(), cursor(), mode(), buffer(),
+    status(), is_dirty(), path(). resize(width, height) stores the size.
+
+  CHANGES. "Change the sheet" below always means, in this order:
+    history.record(sheet.clone()); perform the change; dirty = true.
+
+  handle_key(key) -> Outcome. Returns Outcome::Continue unless a command says
+  Quit. FIRST, in every mode, set status to "" (so a message lives until the
+  next key press). Then:
+
+  Normal mode
+    Left / Char('h'), Right / Char('l'), Up / Char('k'), Down / Char('j')
+        move the cursor one cell; it stops at the sheet edges
+        (0 ..= MAX_COLS-1, 0 ..= MAX_ROWS-1).
+    Tab: as Right. BackTab: as Left.
+    Home: column A of the current row.
+    PageDown / PageUp: move down / up by one page = max(1, height - 3) rows,
+        stopping at the edges.
+    Char('i') or Enter: Edit mode with buffer = the cell's current input.
+    One of the characters  0-9 = - + . ' "  : Edit mode with buffer = that
+        single character (typing a number or a formula replaces the content).
+    Char('x'), Delete, Backspace: if the cell has an input, change the sheet
+        by setting it to "". An already empty cell: nothing happens (not a change).
+    Char('y'): clipboard = ops::copy of the one-cell range at the cursor;
+        status = "copied " + the cell name (e.g. "copied B2"). Not a change.
+    Char('p'): if there is a clipboard, change the sheet with
+        ops::paste(sheet, clip, cursor). The clipboard is kept. No clipboard:
+        nothing happens.
+    Char('u'): undo (below). Ctrl('r'): redo (below).
+    Char(':'): Command mode with an empty buffer.
+    Ctrl('c'): status = "type :q to quit (:q! to discard changes)".
+    Anything else: ignored.
+
+  Edit mode
+    Char(c): append c to the buffer (every character, including h j k l x :).
+    Backspace: remove the last character, if any (stays in Edit mode).
+    Enter: commit, then move the cursor down one row. Tab: commit, then move
+        right one column. COMMIT = if buffer != the cell's current input,
+        change the sheet with sheet.set(cursor, &buffer); either way clear the
+        buffer and return to Normal mode. (An unchanged commit is not a change:
+        no undo step, dirty unaffected.)
+    Esc: discard the buffer, Normal mode, nothing else changes.
+    Anything else: ignored.
+
+  Command mode
+    Char(c): append to the buffer. Backspace: if the buffer is empty return to
+    Normal mode, otherwise remove the last character. Esc: clear the buffer,
+    Normal mode. Enter: take the buffer, clear it, return to Normal mode, then
+    parse_command(&line): Err(msg) -> status = "error: " + msg (Continue);
+    Ok(cmd) -> return execute(cmd). Anything else: ignored.
+
+  execute(command) -> Outcome   (Continue unless stated)
+    Write(name): target = name, or else the current path; if there is neither,
+        status = "error: no file name" and stop. files::save(sheet, target):
+        on Ok, path = Some(target), dirty = false, status = "wrote " + target;
+        on Err(e), status = "error: " + e and nothing else changes.
+    WriteQuit(name): exactly Write; return Outcome::Quit only if the save
+        succeeded.
+    Quit { force }: if dirty and not force, status =
+        "error: unsaved changes (:w to save, :q! to discard)" and Continue;
+        otherwise Outcome::Quit.
+    Edit(file): if dirty, status = "error: unsaved changes (:w to save, :q! to discard)".
+        Otherwise files::load(file): on Ok the sheet is replaced, path =
+        Some(file), cursor = A1, viewport origin reset, dirty = false,
+        history.clear(), status = "opened " + file; on Err(e), status =
+        "error: " + e and nothing else changes.
+    Export(file): write files::sheet_to_csv(sheet, CsvMode::Values) to the
+        file with std::fs::write. Ok -> status = "exported " + file; Err(e) ->
+        status = "error: " + file + ": " + the io error. Neither path nor
+        dirty changes.
+    Goto(cell): cursor = cell.
+    InsertRow / DeleteRow / InsertCol / DeleteCol: change the sheet with
+        ops::apply_structural and InsertRows/DeleteRows { at: cursor.row,
+        count: 1 } or InsertCols/DeleteCols { at: cursor.col, count: 1 }.
+        The cursor does not move.
+    Format(f): if f differs from the cell's current format, change the sheet
+        with set_format(cursor, f). Same format: nothing (no undo step).
+    Width(n): if n differs from the column's current width, change the sheet
+        with set_col_width(cursor.col, n).
+    Undo: match history.undo(sheet.clone()): Some(previous) -> sheet =
+        previous, dirty = true, status = "undone"; None -> status =
+        "nothing to undo".
+    Redo: likewise with history.redo; "redone" / "nothing to redo".
+    Help: status = a ONE-line cheat sheet that mentions at least `:w`, `:q`,
+        `i`, `u` and `:goto` (your wording).
+
+  frame() -> Vec<String>
+    1. Scroll so the cursor is visible, moving the viewport as little as
+       possible. Rows: with rows = height - 3 (saturating): if cursor.row < top
+       then top = cursor.row; else if rows > 0 and cursor.row >= top + rows
+       then top = cursor.row - rows + 1; (if rows == 0, top = cursor.row).
+       Columns: if cursor.col < left then left = cursor.col; otherwise, while
+       the cursor's column is not among `render::layout(...).cols` and
+       left < cursor.col, increase left by one (the gutter can change width as
+       `top` changes, so compute the layout with the final `top`).
+    2. Build the Ui: width, height, top, left, cursor;
+       bar    = Normal: sheet.input(cursor); Edit: the buffer; Command: ":" + buffer
+       status = the status message if it is not empty; otherwise the file name
+                line: the path, or "[no file]" when there is none, followed by
+                " [+]" when dirty
+       mode   = "NORMAL" / "EDIT" / "COMMAND"
+    3. Return render::render(grid, &ui), where the grid shows the sheet:
+       text  = numfmt::format_value(&sheet.value(at), sheet.format(at))
+       align = numfmt::align_of(&sheet.value(at))
+       col_width = sheet.col_width(col)
+       (implement GridSource on a small private wrapper around &Sheet).
+
+  No panics for any key in any mode, any size (including 0 x 0), any cursor
+  position.
+
+  Rules
+    - You may change ONLY the file `src/app.rs`, plus the marker file ci/done/0601-app
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0601-app
+    2. Run the check that will judge your work:      sh ci/check.sh 0601-app
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0601_app.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0601_app`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/app.rs
+    - ci/done/0601-app
+verify: sh ci/check.sh 0601-app
+max_tokens: 4000000
+timeout_minutes: 45
+depends_on:
+  - 0001-cell-addresses
+  - 0301-number-format
+  - 0403-sheet-ops
+  - 0404-files
+  - 0405-history
+  - 0502-renderer
+  - 0503-commands

@@ -1,0 +1,14 @@
+# AgentFund project descriptor. Schema: spec/schemas/agentfund.schema.json (spec_version 1).
+spec_version: 1
+name: gridrs
+description: A terminal spreadsheet in Rust, pixel-perfect-Excel-adjacent. Zero dependencies, zero budget - every line is written by strangers' spare tokens, one signed task at a time.
+repo_url: https://github.com/OWNER/gridrs
+ci_provider: github
+# PLACEHOLDER KEY. Replace with the output of `agentfund keygen` before signing.
+# Donors compare this key's fingerprint with the one the server shows before approving.
+pubkey: RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3
+base_branch: main
+language: rust
+tags: [spreadsheet, tui, terminal, csv, rust, zero-dependencies]
+# Sum of max_tokens over tasks/*.yaml (23 tasks).
+token_goal: 58500000

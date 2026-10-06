@@ -1,0 +1,106 @@
+spec_version: 1
+id: 0203-funcs-text
+title: "Functions: LEN LEFT RIGHT MID UPPER LOWER TRIM CONCAT"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0203-funcs-text. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the text function family in `src/funcs/text.rs`:
+
+    pub fn call(name: &str, args: &[Arg]) -> Option<Value>
+
+  for exactly these names: LEN LEFT RIGHT MID UPPER LOWER TRIM CONCAT. The
+  dispatcher in src/funcs/mod.rs already routes to this function; the stub
+  returns `None` for everything.
+
+  Conventions shared by every function family (follow them exactly):
+    - `call` receives the function name already in ASCII upper case. Return
+      `None` for any name that is not in the list above (exact match only: not
+      for "sum", not for "SUMX"), `Some(value)` otherwise.
+    - Arguments are `Arg::Value(Value)` (a scalar: a literal, a single cell, a
+      computed result; a reference to an empty cell is `Value::Empty`; a failed
+      computation is `Value::Error(_)`) or `Arg::Range(Grid)` (rows x cols
+      values, row-major in `grid.cells`).
+    - Wrong number of arguments -> `Value::Error(ErrorKind::Value)`.
+    - "Scalar argument" below means: an `Arg::Range` there is
+      `ErrorKind::Value`; an `Arg::Value(Error(e))` returns `e`; arguments are
+      checked left to right and the first problem wins.
+    - Coercions come from crate::value (already implemented and merged):
+      to_number / to_text / to_bool (each returns Err(ErrorKind) to return as
+      the function's result), compare, round_to, number_to_text.
+    - Any numeric result that is not finite -> ErrorKind::Num.
+    - No panics on any input (huge or negative counts, empty grids, NaN-free
+      arithmetic).
+
+  "Text argument" below means a scalar argument converted with to_text (so a
+  number becomes its General text, TRUE becomes "TRUE", an empty cell becomes
+  ""). "Count argument" means a scalar argument converted with to_number and
+  truncated toward zero. All positions and lengths are in CHARACTERS (Unicode
+  scalar values, `str::chars`), never bytes: LEN("日本語") is 3.
+
+  LEN(text)                 number of characters, as a Number.
+  UPPER(text), LOWER(text)  `to_uppercase()` / `to_lowercase()`.
+  TRIM(text)                Excel's TRIM: remove leading and trailing spaces and
+                            collapse every inner run of spaces to one. Only the
+                            space character U+0020 is affected; tabs and
+                            newlines are ordinary characters.
+  LEFT(text [, count])      the first `count` characters; count defaults to 1.
+  RIGHT(text [, count])     the last `count` characters; count defaults to 1.
+                            count < 0 -> ErrorKind::Value; count larger than
+                            the text returns the whole text (counts as large as
+                            1e300 must not panic or allocate).
+  MID(text, start, count)   exactly 3 arguments. `count` characters beginning
+                            at 1-based position `start`. start < 1 or count < 0
+                            -> ErrorKind::Value. Running past the end returns
+                            what is there; a start beyond the end returns "".
+  CONCAT(a, b, ...)         1 or more arguments of any kind. Walk the arguments
+                            left to right and ranges row-major, converting each
+                            value with to_text and joining them; empty cells
+                            contribute nothing. The first Error met in the walk
+                            (scalar or inside a range) is the result.
+
+  Every function returns Value::Text except LEN (a Number).
+
+  Rules
+    - You may change ONLY the file `src/funcs/text.rs`, plus the marker file ci/done/0203-funcs-text
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0203-funcs-text
+    2. Run the check that will judge your work:      sh ci/check.sh 0203-funcs-text
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0203_funcs_text.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0203_funcs_text`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/funcs/text.rs
+    - ci/done/0203-funcs-text
+verify: sh ci/check.sh 0203-funcs-text
+max_tokens: 2000000
+timeout_minutes: 25
+depends_on:
+  - 0002-values

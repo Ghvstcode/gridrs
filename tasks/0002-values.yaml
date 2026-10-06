@@ -1,0 +1,149 @@
+spec_version: 1
+id: 0002-values
+title: "Value semantics: literals, coercion, comparison, decimal rounding"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0002-values. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement value semantics in `src/value.rs`: how typed text becomes a value,
+  how values convert to numbers/text/booleans, how they compare, and how numbers
+  are rounded and written. Everything else in the spreadsheet (operators,
+  functions, display) is built on these nine functions, so the details matter.
+  The file contains every function as a documented stub; replace the bodies.
+
+  `Value` (src/types.rs, do not change) is
+  `Empty | Number(f64) | Text(String) | Bool(bool) | Error(ErrorKind)`.
+  `ErrorKind::parse("#N/A")` and `ErrorKind::as_str()` already exist.
+
+  The one idea behind the numeric functions: like Excel, gridrs treats a number
+  as having at most 15 significant DECIMAL digits. "The 15-digit form of x" below
+  means x correctly rounded to 15 significant decimal digits, which is exactly
+  what `format!("{:.14e}", x)` gives you (a mantissa `d.dddddddddddddd` and a
+  decimal exponent). Work on those decimal digits; never round in binary.
+
+  parse_number(s: &str) -> Option<f64>
+    Trim ASCII whitespace from both ends. Then accept exactly:
+      [+|-] ( digits [ "." [digits] ] | "." digits ) [ (e|E) [+|-] digits ] [ "%" ]
+    with ASCII digits only. A trailing `%` divides by 100 ("12%" -> 0.12).
+    Reject everything else: "", ".", "1e", "1,234", "0x10", "inf", "NaN",
+    "1 2", "12 %", "1%%", "$5", non-ASCII digits. Reject a result that is not
+    finite ("1e999"). (`str::parse::<f64>` alone is too lenient: it accepts
+    "inf", "nan", "infinity".)
+
+  parse_literal(input: &str) -> Value
+    What a cell contains when the user typed `input` and it is not a formula.
+    In this order:
+      1. ""                                  -> Empty
+      2. starts with an apostrophe `'`       -> Text(everything after the first apostrophe)
+         ("'42" -> Text("42"), "'" -> Text(""))
+      3. parse_number(input) is Some(n)      -> Number(n)
+      4. trimmed, equals TRUE / FALSE ignoring ASCII case -> Bool
+      5. trimmed, ErrorKind::parse succeeds  -> Error  ("#N/A", "#div/0!")
+      6. anything else                       -> Text(input), unchanged (whitespace kept)
+
+  format_fixed(x: f64, decimals: usize) -> String
+    x in plain decimal notation with exactly `decimals` digits after the point
+    (no point at all when decimals == 0), rounded HALF AWAY FROM ZERO, computed
+    from the 15-digit form. Digits beyond the 15th significant digit are zeros,
+    not binary noise:
+      format_fixed(2.675, 2) == "2.68"      (the double is 2.67499999..., the 15-digit form is 2.67500000000000)
+      format_fixed(1.005, 2) == "1.01"      format_fixed(-2.5, 0) == "-3"
+      format_fixed(123.456, 15) == "123.456000000000000"
+      format_fixed(1e20, 2) == "100000000000000000000.00"
+      format_fixed(1.0/3.0, 20) == "0.33333333333333300000"
+    Never produce a negative zero: if every digit of the result is 0, there is
+    no minus sign (format_fixed(-0.001, 2) == "0.00"). No exponent notation,
+    ever, however large or small x is. No panics for any finite x and any
+    `decimals` (callers pass at most a few hundred).
+
+  round_to(x: f64, digits: i32) -> f64
+    x rounded half away from zero to `digits` decimal places, as a number:
+    the f64 nearest to the decimal result. For digits >= 0 this is
+    format_fixed(x, digits) parsed back. Negative digits round to tens,
+    hundreds, ...: round_to(1234.5678, -2) == 1200.0, round_to(50.0, -2) == 100.0,
+    round_to(49.0, -2) == 0.0. Any i32 must work without panicking or taking
+    noticeable time: a huge positive `digits` returns x unchanged (it has no
+    digits that far out), a hugely negative one returns 0.0.
+
+  number_to_text(n: f64) -> String
+    "General" format, used wherever a number becomes text (the `&` operator,
+    the default cell display). Take the 15-digit form d.ddd...E(e), drop trailing
+    zeros of the mantissa, then:
+      - zero (and -0.0) is "0";
+      - if -9 <= e <= 14: plain decimal notation, no trailing zeros, no trailing
+        point ("0.1", "1234567", "0.333333333333333", "-1.5", "0.000000001");
+      - otherwise scientific, Excel style: mantissa, `E`, an explicit sign, the
+        exponent without padding: "1E+15", "1.5E+15", "1.23E-10", "1.2345E+100".
+    So 0.1 + 0.2 prints as "0.3" and 100.0 * 1.1 as "110".
+
+  to_number(v: &Value) -> Result<f64, ErrorKind>
+    Number(n) -> n; Empty -> 0; Bool -> 1 or 0; Text(s) -> parse_number(s) or
+    Err(ErrorKind::Value); Error(e) -> Err(e).
+
+  to_text(v: &Value) -> Result<String, ErrorKind>
+    Text(s) -> s; Empty -> ""; Number(n) -> number_to_text(n);
+    Bool -> "TRUE" / "FALSE"; Error(e) -> Err(e).
+
+  to_bool(v: &Value) -> Result<bool, ErrorKind>
+    Bool(b) -> b; Number(n) -> n != 0; Empty -> false; Text equal to TRUE/FALSE
+    ignoring ASCII case -> that; any other Text -> Err(ErrorKind::Value)
+    (note "1" is not a boolean); Error(e) -> Err(e).
+
+  compare(a: &Value, b: &Value) -> std::cmp::Ordering
+    The order behind `=`, `<`, `>` and lookups.
+      - Different kinds order as Number < Text < Bool, whatever their content
+        (Text("1") is greater than Number(1), never equal).
+      - Number vs Number: compare their 15-digit forms, i.e. round both to 15
+        significant digits first (parse the `{:.14e}` string back). This is why
+        0.1 + 0.2 = 0.3 is TRUE in a spreadsheet. 0.0 and -0.0 are equal.
+      - Text vs Text: case-insensitive (compare the `to_lowercase()` forms),
+        then by Unicode scalar value; a prefix is smaller ("abc" < "abcd").
+      - Bool vs Bool: FALSE < TRUE.
+      - Empty adapts to the other side: against a Number it acts as 0, against
+        Text as "", against a Bool as FALSE; Empty vs Empty is Equal.
+      - Errors never reach this function in practice (callers propagate them
+        first). Do something total: treat an Error as greater than any
+        non-error and equal to any other Error.
+
+  Rules
+    - You may change ONLY the file `src/value.rs`, plus the marker file ci/done/0002-values
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0002-values
+    2. Run the check that will judge your work:      sh ci/check.sh 0002-values
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0002_values.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0002_values`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/value.rs
+    - ci/done/0002-values
+verify: sh ci/check.sh 0002-values
+max_tokens: 3000000
+timeout_minutes: 35
+depends_on: []

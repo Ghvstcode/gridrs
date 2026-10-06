@@ -1,0 +1,90 @@
+spec_version: 1
+id: 0301-number-format
+title: "Number formats: general, fixed, thousands, percent"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0301-number-format. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement cell display formatting in `src/numfmt.rs`:
+
+    pub fn format_value(v: &Value, fmt: NumFormat) -> String
+    pub fn align_of(v: &Value) -> Align
+
+  `Value`, `NumFormat { General, Fixed(u8), Thousands(u8), Percent(u8) }` and
+  `Align { Left, Right, Center }` are in src/types.rs (do not change them).
+
+  Already implemented and merged, use them (crate::value):
+    number_to_text(f64) -> String          "General" text: "0.3", "1E+15"
+    format_fixed(f64, usize) -> String     exact decimal, half away from zero,
+                                           never "-0": format_fixed(2.675, 2) == "2.68"
+  Do not re-implement rounding with `format!("{:.2}")` or `f64::round`: those
+  round in binary and get 2.675 and 1.005 wrong. format_fixed is the only
+  rounding you need.
+
+  format_value
+    Only numbers are affected by the format. For every `fmt`:
+      Empty -> ""        Text(s) -> s unchanged (even if it looks like a number)
+      Bool  -> "TRUE" / "FALSE"        Error(e) -> e.as_str()  (e.g. "#DIV/0!")
+    Number(n):
+      General       number_to_text(n)
+      Fixed(d)      format_fixed(n, d)                       1234.5 -> "1234.50"
+      Thousands(d)  format_fixed(n, d) with a comma between every group of
+                    three digits of the INTEGER part, counted from the decimal
+                    point; the sign stays in front and decimals are never
+                    grouped: 1234567.891 -> "1,234,567.89", -1234.5 ->
+                    "-1,234.50", 999 -> "999", 12 with 4 decimals -> "12.0000"
+      Percent(d)    format_fixed(n * 100.0, d) followed by "%", no grouping:
+                    0.125 with 1 decimal -> "12.5%", 12 -> "1200%".
+                    (Multiplying by 100 in binary is fine: 0.07 * 100.0 is
+                    7.000000000000001, and format_fixed sees it as 7.)
+    Because format_fixed never prints a negative zero, neither do you:
+    -0.001 as Fixed(2) is "0.00", -0.00004 as Percent(2) is "0.00%".
+    Must not panic for any finite number and any decimals 0..=15 (1e300 as
+    Percent(0) is a 303-digit number and a percent sign).
+
+  align_of
+    Number -> Right; Text -> Left; Empty -> Left; Bool -> Center; Error -> Center.
+
+  Rules
+    - You may change ONLY the file `src/numfmt.rs`, plus the marker file ci/done/0301-number-format
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0301-number-format
+    2. Run the check that will judge your work:      sh ci/check.sh 0301-number-format
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0301_number_format.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0301_number_format`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/numfmt.rs
+    - ci/done/0301-number-format
+verify: sh ci/check.sh 0301-number-format
+max_tokens: 1500000
+timeout_minutes: 20
+depends_on:
+  - 0002-values

@@ -1,0 +1,140 @@
+spec_version: 1
+id: 0402-sheet
+title: "The sheet: cells, formulas, recalculation, formats, widths"
+prompt: |
+  gridrs is a terminal spreadsheet written in Rust with the standard library
+  only. It is built one small task at a time by different people's coding
+  agents; this is task 0402-sheet. The skeleton of the whole program already exists:
+  every module is declared, every public function has its final signature and a
+  doc comment, and the bodies are stubs. Your job is to replace the stubs named
+  below with a real implementation. You cannot ask questions: everything you
+  need is in this text, in the repository, and in the acceptance test.
+
+  Implement the spreadsheet model in `src/sheet.rs`: the grid of cells that
+  ties the formula engine together. `Sheet` is declared with a placeholder
+  field; its private fields are yours to design. It must stay
+  `Debug + Clone + Default` (undo keeps whole-sheet snapshots, so `clone()`
+  must give a fully independent sheet). Every method exists as a documented
+  stub. `impl Context for Sheet` is already written at the bottom of the file
+  (it forwards `cell` to `value`); keep it.
+
+  Already implemented and merged, use them:
+    crate::value::parse_literal(&str) -> Value              typed text -> value
+    crate::formula::parser::parse(&str) -> Result<Expr, FormulaError>   accepts the leading `=`
+    crate::formula::refs::precedents(&Expr) -> Vec<Range>   what a formula reads
+    crate::formula::eval::eval(&Expr, &dyn Context) -> Value
+    crate::depgraph::DepGraph  { set_precedents, remove, recalc_plan(&[CellRef]) -> RecalcPlan { order, cyclic } }
+  Types and constants are in src/types.rs (do not change them): CellRef, Range,
+  Value, ErrorKind, NumFormat, DEFAULT_COL_WIDTH (10), MIN_COL_WIDTH (1),
+  MAX_COL_WIDTH (60).
+
+  Content
+
+    new() -> Sheet                       an empty sheet (same as Default)
+
+    set(&mut self, at: CellRef, input: &str)
+      Store what the user typed in a cell, then recalculate. Same as `apply`
+      with one edit.
+
+    apply(&mut self, edits: &[(CellRef, String)])
+      Store all the inputs in order (a later edit to the same cell wins), THEN
+      recalculate once, so the batch is seen as a whole (swapping two cells that
+      refer to each other must not produce a phantom cycle).
+      For each input:
+        - ""  -> the cell becomes empty (it disappears from `cells()`).
+        - starts with `=` and is longer than one character -> a FORMULA. Parse
+          the whole input with `parser::parse`. If it does not parse, the
+          cell's value is `Value::Error(ErrorKind::Name)` and it reads nothing.
+          If it parses, register `refs::precedents(&expr)` with the dependency
+          graph and keep the parsed expression for recalculation.
+        - anything else (including a lone "=") -> a literal:
+          `value::parse_literal(input)`.
+      The input string is always kept exactly as given.
+      Recalculation: ask the dependency graph for `recalc_plan(changed cells)`.
+      Every cell in `plan.cyclic` gets `Value::Error(ErrorKind::Cycle)`
+      (without evaluating it). Then evaluate the cells of `plan.order` in that
+      order with `eval(expr, self)` and store each result before evaluating
+      the next (later cells read earlier results through `Context::cell`).
+      Cells whose formula did not parse are not in the graph; they just keep
+      #NAME?. Do not recurse per dependency: 3,000 formulas in a chain must
+      work.
+
+    input(&self, at) -> String           the stored input, "" if none
+    value(&self, at) -> Value            the current value, Value::Empty if none
+    cells(&self) -> Vec<(CellRef, String)>
+      every non-empty input, sorted row-major (`CellRef`'s `Ord`)
+    used_range(&self) -> Option<Range>
+      the smallest range containing every cell that has an input; None if there
+      is none. (Formats and widths do not count as content.)
+
+  Presentation (never affects values or `cells()` / `used_range()`)
+
+    format(&self, at) -> NumFormat       NumFormat::General unless set
+    set_format(&mut self, at, format)    setting General removes the entry;
+                                         formatting an empty cell is allowed,
+                                         and clearing a cell's input keeps its format
+    formats(&self) -> Vec<(CellRef, NumFormat)>   non-General entries, row-major
+    col_width(&self, col) -> usize       DEFAULT_COL_WIDTH unless set
+    set_col_width(&mut self, col, width) clamp to MIN_COL_WIDTH..=MAX_COL_WIDTH;
+                                         a width equal to DEFAULT_COL_WIDTH removes the entry
+    col_widths(&self) -> Vec<(u32, usize)>        non-default entries, ascending by column
+
+  Behaviour to get right
+    - A formula can be entered before the cells it reads; it updates when they
+      are filled in.
+    - Replacing a formula (by another formula, a literal, or "") must drop its
+      old dependencies.
+    - A cycle shows #CYCLE! in every cell on it and in every cell that reads
+      one of those; breaking the cycle (editing any cell on it) heals all of
+      them on that same edit.
+    - Errors propagate through formulas by evaluation: if A1 is #NAME?, then
+      `=A1+1` is #NAME?.
+    - `=SUM(A1:A1000)` must react to an edit of any cell in the range and must
+      not react to edits outside it. Do not expand ranges into per-cell
+      dependencies yourself; the dependency graph takes ranges.
+    - The far corners (XFD1048576) are ordinary cells. Store cells sparsely
+      (a HashMap or BTreeMap keyed by CellRef), never as a dense grid.
+
+  Rules
+    - You may change ONLY the file `src/sheet.rs`, plus the marker file ci/done/0402-sheet
+      (see below). A change to any other file - including Cargo.toml,
+      Cargo.lock, src/types.rs, src/lib.rs, any mod.rs, and anything under
+      acceptance/ or ci/ other than your marker - makes the whole run be
+      discarded.
+    - Standard library only: no new dependencies. There is no network access;
+      always pass `--offline` to cargo.
+    - Do not change the name, parameters or return type of any existing `pub`
+      item in your file(s): other tasks and the acceptance test compile against
+      them. You may add private helpers, and unit tests in a
+      `#[cfg(test)] mod tests` at the bottom of your file(s).
+    - No `unsafe`. No panics on any input: nothing that can fail on user data
+      (`unwrap`, unchecked indexing, overflowing arithmetic). No `todo!()` left
+      behind.
+    - Delete the `#![allow(unused_variables)]` line at the top of each stub you
+      implement and reword its "Stub: ..." doc line. The code should compile
+      without warnings.
+
+  Finishing
+    1. Create the empty marker file for this task:   : > ci/done/0402-sheet
+    2. Run the check that will judge your work:      sh ci/check.sh 0402-sheet
+       It builds the crate, runs the unit tests, runs the acceptance test
+       acceptance/t0402_sheet.rs (which you can read but must not change) and
+       re-runs the acceptance test of every task merged before yours. It must
+       end with "check.sh: OK". While iterating, run just your own test with
+       `cargo test --offline --test t0402_sheet`.
+    If the acceptance test and this text ever seem to disagree, the acceptance
+    test wins: make it pass without touching it.
+scope:
+  write:
+    - src/sheet.rs
+    - ci/done/0402-sheet
+verify: sh ci/check.sh 0402-sheet
+max_tokens: 3500000
+timeout_minutes: 40
+depends_on:
+  - 0002-values
+  - 0102-formula-parser
+  - 0103-reference-rewriting
+  - 0104-evaluator
+  - 0201-funcs-math
+  - 0401-dependency-graph
