@@ -91,7 +91,7 @@ fn undo_redo_help() {
 #[test]
 fn errors() {
     for bad in [
-        "", "   ", "nope", "W", "Q", "quit", "write", ":w", "q now", "q! now", "q !", "wq!", "e", "e   ", "export", "goto", "goto 12", "goto A0", "goto A1 B2", "goto $A$1", "goto A1:B2", "A0", "A1:B2", "12", "insrow 3", "ir 2", "dr x", "ic 1", "dc 1", "fmt", "fmt nope", "fmt fixed", "fmt fixed 16", "fmt fixed -1", "fmt Fixed 2", "format", "width", "width 0", "width 61", "width ten", "width 5 5", "width -3", "width 5.0", "undo 2", "u 2", "redo 1", "help me", "h 1",
+        "", "   ", "nope", "W", "Q", "quit", "write", ":w", "q now", "q! now", "q !", "wq!", "e", "e   ", "export", "goto", "goto 12", "goto A0", "goto A1 B2", "goto $A$1", "goto A1:B2", "A0", "A1:B2", "12", "B12 x", "B12 C3", "insrow 3", "ir 2", "dr x", "ic 1", "dc 1", "fmt", "fmt nope", "fmt fixed", "fmt fixed 16", "fmt fixed -1", "fmt Fixed 2", "format", "width", "width 0", "width 61", "width ten", "width 5 5", "width -3", "width 5.0", "undo 2", "u 2", "redo 1", "help me", "h 1",
     ] {
         let e = parse_command(bad).expect_err(&format!("parse_command({bad:?}) should fail"));
         assert!(!e.is_empty() && !e.contains('\n'), "error for {bad:?} should be one non-empty line: {e:?}");

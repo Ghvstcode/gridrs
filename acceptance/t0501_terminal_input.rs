@@ -110,6 +110,10 @@ fn unknown_sequences_are_swallowed_whole() {
     assert_eq!(keys(b"a\x1b[15~b"), vec![Char('a'), Char('b')], "and decoding resumes right after");
     assert_eq!(keys(b"\x1b[1;5Qx"), vec![Char('x')]);
     assert_eq!(keys(b"\x1b[ qx"), vec![Char('x')], "intermediate bytes belong to the sequence");
+    // a byte that cannot belong to the sequence abandons it; decoding resumes AT that byte
+    assert_eq!(keys(b"\x1b[1;\x1b[A"), vec![Up]);
+    assert_eq!(keys(b"\x1b[\x01x"), vec![Ctrl('a'), Char('x')]);
+    assert_eq!(keys(b"\x1b[5\rz"), vec![Enter, Char('z')]);
 }
 
 #[test]

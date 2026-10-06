@@ -144,6 +144,8 @@ fn body_errors_name_the_line() {
         ("width A 0", "width out of range"),
         ("width A 61", "width out of range"),
         ("width A ten", "bad width"),
+        ("width A +5", "bad width: digits only"),
+        ("width A 99999999999999999999999", "width out of range"),
         ("width A1 10", "bad column"),
         ("width A 10 20", "extra field"),
         ("format A1", "missing format"),
