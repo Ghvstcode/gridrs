@@ -106,6 +106,26 @@ fn the_cursor_stops_at_the_edges() {
 }
 
 #[test]
+fn nothing_panics_at_the_corner_of_the_sheet_or_on_odd_keys() {
+    let mut a = app();
+    a.execute(Command::Goto(CellRef::new(MAX_COLS - 1, MAX_ROWS - 1)));
+    typ(&mut a, "7");
+    press(&mut a, &[Enter]); // commit at the last row: the cursor has nowhere to go
+    assert_eq!(a.cursor(), CellRef::new(MAX_COLS - 1, MAX_ROWS - 1));
+    typ(&mut a, "8");
+    press(&mut a, &[Tab]);
+    assert_eq!(a.cursor(), CellRef::new(MAX_COLS - 1, MAX_ROWS - 1));
+    assert_eq!(a.sheet().input(a.cursor()), "8");
+    for (w, h) in [(0, 0), (1, 1), (3, 3), (80, 24)] {
+        a.resize(w, h);
+        assert_eq!(frame(&mut a).len(), h);
+    }
+    press(&mut a, &[End, Ctrl('a'), Ctrl('z'), Esc, Char('~')]);
+    assert_eq!(a.mode(), Mode::Normal);
+    assert_eq!(a.cursor(), CellRef::new(MAX_COLS - 1, MAX_ROWS - 1), "End and stray Ctrl keys are ignored");
+}
+
+#[test]
 fn home_and_paging() {
     let mut a = app();
     a.resize(80, 24); // 21 body rows

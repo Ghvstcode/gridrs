@@ -71,7 +71,7 @@ prompt: |
     Char('u'): undo (below). Ctrl('r'): redo (below).
     Char(':'): Command mode with an empty buffer.
     Ctrl('c'): status = "type :q to quit (:q! to discard changes)".
-    Anything else: ignored.
+    Anything else (including End and every other Ctrl key): ignored.
 
   Edit mode
     Char(c): append c to the buffer (every character, including h j k l x :).
@@ -83,6 +83,7 @@ prompt: |
         no undo step, dirty unaffected.)
     Esc: discard the buffer, Normal mode, nothing else changes.
     Anything else: ignored.
+    The cursor moves after Enter/Tab stop at the sheet edges like any other move.
 
   Command mode
     Char(c): append to the buffer. Backspace: if the buffer is empty return to
