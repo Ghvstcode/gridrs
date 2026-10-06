@@ -13,7 +13,7 @@ categories = ["command-line-utilities"]
 autotests = false
 
 # No [dependencies] section, on purpose. Tasks run in a sandbox whose network
-# reaches only the git host and the model API, so cargo could not fetch a crate
+# reaches only the model API, so cargo could not fetch a crate
 # even if we wanted one. gridrs is standard library only.
 
 [lib]

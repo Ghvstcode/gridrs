@@ -124,7 +124,7 @@ cases, a token budget, and a command that decides whether the work is done.
 The maintainer signs the whole set (`tasks/MANIFEST.lock` +
 `tasks/MANIFEST.lock.minisig`). A donor's worker verifies that signature
 against the key the donor approved, runs the agent in a sandbox that can reach
-the git host and the model API and nothing else, checks that only the allowed
+the model API and nothing else, checks that only the allowed
 files changed, and opens a pull request. The tokens count as delivered only
 when CI passes on that branch.
 
