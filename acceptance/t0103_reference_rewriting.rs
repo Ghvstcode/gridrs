@@ -115,6 +115,12 @@ fn translate_keeps_range_endpoints_as_written() {
 }
 
 #[test]
+fn translate_moves_each_range_endpoint_by_its_own_flags() {
+    // $A1:B$7 moved by (+2, +3) -> $A4:D$7
+    assert_eq!(translate(&range(ra(0, 0, true, false), ra(1, 6, false, true)), 2, 3), range(ra(0, 3, true, false), ra(3, 6, false, true)));
+}
+
+#[test]
 fn translate_off_the_sheet_becomes_ref_error() {
     assert_eq!(translate(&cell(0, 0), -1, 0), REF_ERR);
     assert_eq!(translate(&cell(0, 0), 0, -1), REF_ERR);
@@ -174,6 +180,7 @@ fn insert_pushing_a_reference_off_the_sheet_is_ref_error() {
     assert_eq!(adjust(&cell(MAX_COLS - 1, 0), InsertCols { at: 0, count: 1 }), REF_ERR);
     assert_eq!(adjust(&range(r(0, 0), r(0, MAX_ROWS - 1)), InsertRows { at: 5, count: 1 }), REF_ERR);
     assert_eq!(adjust(&cell(0, 10), InsertRows { at: 0, count: u32::MAX }), REF_ERR, "must not overflow");
+    assert_eq!(adjust(&range(r(0, 0), r(MAX_COLS - 1, 0)), InsertCols { at: 5, count: 1 }), REF_ERR);
     assert_eq!(adjust(&cell(0, MAX_ROWS - 2), InsertRows { at: 0, count: 1 }), cell(0, MAX_ROWS - 1));
 }
 

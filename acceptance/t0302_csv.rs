@@ -99,6 +99,7 @@ fn syntax_errors_report_the_line() {
     let e = parse("\"multi\nline\",ok\n\"bad\"!\n").unwrap_err();
     assert_eq!(e.line, 3, "physical lines, counting newlines inside quoted fields");
 
+    assert!(parse("\"a\"\rb\n").is_err(), "a lone CR is data, and data may not follow a closing quote");
     assert!(parse("\"").is_err());
     assert!(parse("a,\"").is_err());
     assert!(parse("\"a\"\"").is_err());
