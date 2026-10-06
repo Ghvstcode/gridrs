@@ -71,6 +71,8 @@ prompt: |
     `col` are index arguments (checked in that order).
     With 3 arguments: row < 1 or col < 1 -> ErrorKind::Value; row > rows or
     col > cols -> ErrorKind::Ref; else the value at (row, col), 1-based, as is.
+    Both lower bounds are checked before either upper bound, so
+    INDEX(range, 0, 99) is ErrorKind::Value, not ErrorKind::Ref.
     With 2 arguments: if the range has exactly one row, the index selects the
     COLUMN (INDEX(A1:C1, 3) is C1); otherwise it selects the row and the column
     is 1. Same bounds rules.

@@ -42,6 +42,8 @@ prompt: |
   ""). "Count argument" means a scalar argument converted with to_number and
   truncated toward zero. All positions and lengths are in CHARACTERS (Unicode
   scalar values, `str::chars`), never bytes: LEN("日本語") is 3.
+  A count argument that is not finite after conversion is ErrorKind::Num
+  (to_number never produces one today; this just fixes the answer).
 
   LEN(text)                 number of characters, as a Number.
   UPPER(text), LOWER(text)  `to_uppercase()` / `to_lowercase()`.

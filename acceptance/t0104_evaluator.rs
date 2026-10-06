@@ -265,6 +265,12 @@ fn oversized_ranges_are_not_materialised() {
     let everything = range(0, 0, 16383, 1048575);
     assert_eq!(eval(&call("ARGC", vec![everything]), &ctx), err(ErrorKind::Num));
     assert!(ctx.calls.borrow().is_empty(), "the function must not be called");
+    // arguments are processed left to right: what comes before the oversized range has run, what comes after has not
+    let ctx2 = Ctx::default();
+    let e = call("ARGC", vec![call("SEVEN", vec![]), range(0, 0, 16383, 1048575), call("BOOM", vec![])]);
+    assert_eq!(eval(&e, &ctx2), err(ErrorKind::Num));
+    let names: Vec<String> = ctx2.calls.borrow().iter().map(|(name, _)| name.clone()).collect();
+    assert_eq!(names, ["SEVEN"]);
     // exactly at the limit is fine: 1000 columns x 1000 rows
     assert_eq!(eval(&call("ARGC", vec![range(0, 0, 999, 999)]), &ctx), num(1.0));
     // one more row is not

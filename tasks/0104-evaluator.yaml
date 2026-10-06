@@ -68,6 +68,10 @@ prompt: |
                If the range has more than MAX_RANGE_CELLS cells
                (`Range::len()`), do not build anything and do not call the
                function: the whole call evaluates to ErrorKind::Num.
+               Arguments are processed strictly left to right, so
+               arguments before the oversized range have already been
+               evaluated (including any nested calls they contain) and
+               arguments after it never are.
              - any other argument is evaluated with the INNER evaluation and
                passed as `Arg::Value(v)`: a reference to an empty cell arrives
                as Value::Empty (not 0), and an argument that evaluates to an

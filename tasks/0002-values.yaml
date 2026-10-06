@@ -69,6 +69,9 @@ prompt: |
     round_to(49.0, -2) == 0.0. Any i32 must work without panicking or taking
     noticeable time: a huge positive `digits` returns x unchanged (it has no
     digits that far out), a hugely negative one returns 0.0.
+    A non-finite x (NaN, infinity) is returned unchanged. If rounding with
+    negative digits carries past the largest f64 (only possible within a
+    hair of f64::MAX), the result is infinity; do not guard against it.
 
   number_to_text(n: f64) -> String
     "General" format, used wherever a number becomes text (the `&` operator,

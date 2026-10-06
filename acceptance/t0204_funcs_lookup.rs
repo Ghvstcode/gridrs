@@ -142,6 +142,8 @@ fn index_two_dimensional() {
     assert_eq!(f("INDEX", &[fruit(), n(1.0), n(0.0)]), err(ErrorKind::Value));
     assert_eq!(f("INDEX", &[fruit(), n(-1.0), n(1.0)]), err(ErrorKind::Value));
     assert_eq!(f("INDEX", &[fruit(), n(1e300), n(1.0)]), err(Ref));
+    assert_eq!(f("INDEX", &[fruit(), n(99.0), n(0.0)]), err(ErrorKind::Value), "lower bounds are checked before upper bounds");
+    assert_eq!(f("INDEX", &[fruit(), n(0.0), n(99.0)]), err(ErrorKind::Value));
 }
 
 #[test]
