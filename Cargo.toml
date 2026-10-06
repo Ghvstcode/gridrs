@@ -1,0 +1,125 @@
+[package]
+name = "gridrs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "A terminal spreadsheet in Rust, pixel-perfect-Excel-adjacent. Written by strangers' spare tokens."
+license = "MIT"
+repository = "https://github.com/OWNER/gridrs"
+readme = "README.md"
+keywords = ["spreadsheet", "tui", "terminal", "csv"]
+categories = ["command-line-utilities"]
+# Acceptance tests are declared explicitly below, one target per task.
+autotests = false
+
+# No [dependencies] section, on purpose. Tasks run in a sandbox whose network
+# reaches only the git host and the model API, so cargo could not fetch a crate
+# even if we wanted one. gridrs is standard library only.
+
+[lib]
+name = "gridrs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gridrs"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+
+# --- acceptance targets: one per task, `sh ci/check.sh <task-id>` runs exactly one ---
+# id 0007-eval  <->  target t0007_eval  <->  acceptance/t0007_eval.rs
+
+[[test]]
+name = "t0001_cell_addresses"
+path = "acceptance/t0001_cell_addresses.rs"
+
+[[test]]
+name = "t0002_values"
+path = "acceptance/t0002_values.rs"
+
+[[test]]
+name = "t0101_formula_lexer"
+path = "acceptance/t0101_formula_lexer.rs"
+
+[[test]]
+name = "t0102_formula_parser"
+path = "acceptance/t0102_formula_parser.rs"
+
+[[test]]
+name = "t0103_reference_rewriting"
+path = "acceptance/t0103_reference_rewriting.rs"
+
+[[test]]
+name = "t0104_evaluator"
+path = "acceptance/t0104_evaluator.rs"
+
+[[test]]
+name = "t0201_funcs_math"
+path = "acceptance/t0201_funcs_math.rs"
+
+[[test]]
+name = "t0202_funcs_logic"
+path = "acceptance/t0202_funcs_logic.rs"
+
+[[test]]
+name = "t0203_funcs_text"
+path = "acceptance/t0203_funcs_text.rs"
+
+[[test]]
+name = "t0204_funcs_lookup"
+path = "acceptance/t0204_funcs_lookup.rs"
+
+[[test]]
+name = "t0301_number_format"
+path = "acceptance/t0301_number_format.rs"
+
+[[test]]
+name = "t0302_csv"
+path = "acceptance/t0302_csv.rs"
+
+[[test]]
+name = "t0303_native_format"
+path = "acceptance/t0303_native_format.rs"
+
+[[test]]
+name = "t0401_dependency_graph"
+path = "acceptance/t0401_dependency_graph.rs"
+
+[[test]]
+name = "t0402_sheet"
+path = "acceptance/t0402_sheet.rs"
+
+[[test]]
+name = "t0403_sheet_ops"
+path = "acceptance/t0403_sheet_ops.rs"
+
+[[test]]
+name = "t0404_files"
+path = "acceptance/t0404_files.rs"
+
+[[test]]
+name = "t0405_history"
+path = "acceptance/t0405_history.rs"
+
+[[test]]
+name = "t0501_terminal_input"
+path = "acceptance/t0501_terminal_input.rs"
+
+[[test]]
+name = "t0502_renderer"
+path = "acceptance/t0502_renderer.rs"
+
+[[test]]
+name = "t0503_commands"
+path = "acceptance/t0503_commands.rs"
+
+[[test]]
+name = "t0601_app"
+path = "acceptance/t0601_app.rs"
+
+[[test]]
+name = "t0602_cli"
+path = "acceptance/t0602_cli.rs"
