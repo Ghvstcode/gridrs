@@ -146,6 +146,13 @@ fn paste_clips_at_the_sheet_edge() {
     paste(&mut s, &clip, corner);
     assert_eq!(s.input(corner), "a", "only the part that fits is pasted");
     assert_eq!(s.cells().len(), 5);
+    // on the last row but not the last column: the top row of the clip fits, the bottom row does not
+    let mut s = sheet(&[("A1", "a"), ("B1", "b"), ("A2", "c"), ("B2", "d")]);
+    let clip = copy(&s, range("A1:B2"));
+    paste(&mut s, &clip, CellRef::new(5, MAX_ROWS - 1));
+    assert_eq!(s.input(CellRef::new(5, MAX_ROWS - 1)), "a");
+    assert_eq!(s.input(CellRef::new(6, MAX_ROWS - 1)), "b");
+    assert_eq!(s.cells().len(), 6);
 }
 
 #[test]

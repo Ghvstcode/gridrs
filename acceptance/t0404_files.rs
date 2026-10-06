@@ -56,6 +56,9 @@ fn kind_is_chosen_by_extension() {
     assert_eq!(kind_for_path("budget.grid.csv"), FileKind::Csv);
     assert_eq!(kind_for_path("dir.grid/budget"), FileKind::Csv, "only the file name counts");
     assert_eq!(kind_for_path(""), FileKind::Csv);
+    assert_eq!(kind_for_path("C:\\work\\budget.grid"), FileKind::Native, "backslash is a separator too");
+    assert_eq!(kind_for_path("C:\\work.grid\\budget"), FileKind::Csv);
+    assert_eq!(kind_for_path(".grid"), FileKind::Native, "the name ends with .grid");
 }
 
 #[test]
