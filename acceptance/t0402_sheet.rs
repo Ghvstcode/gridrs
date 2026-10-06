@@ -81,6 +81,18 @@ fn formulas_are_evaluated() {
 }
 
 #[test]
+fn formulas_without_references_are_evaluated_too() {
+    let mut s = sheet(&[("A1", "=1+2"), ("A2", "=1/0"), ("A3", "=\"a\"&\"b\""), ("A4", "=SUM(1,2,3)"), ("B1", "=A1*2")]);
+    assert_eq!(val(&s, "A1"), num(3.0));
+    assert_eq!(val(&s, "A2"), err(ErrorKind::Div0));
+    assert_eq!(val(&s, "A3"), text("ab"));
+    assert_eq!(val(&s, "A4"), num(6.0));
+    assert_eq!(val(&s, "B1"), num(6.0));
+    s.set(at("A1"), "=10");
+    assert_eq!(val(&s, "B1"), num(20.0), "and their readers follow when they are replaced");
+}
+
+#[test]
 fn functions_and_ranges_work_through_the_sheet() {
     let s = sheet(&[("A1", "1"), ("A2", "2"), ("A3", "3"), ("B1", "x"), ("C1", "=SUM(A1:A3)"), ("C2", "=sum(A1:B3, 10)"), ("C3", "=MAX(A1:A3)-MIN(A1:A3)"), ("C4", "=NOSUCHFUNCTION(1)")]);
     assert_eq!(val(&s, "C1"), num(6.0));

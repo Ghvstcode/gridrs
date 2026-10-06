@@ -55,6 +55,11 @@ prompt: |
       (without evaluating it). Then evaluate the cells of `plan.order` in that
       order with `eval(expr, self)` and store each result before evaluating
       the next (later cells read earlier results through `Context::cell`).
+      Careful: the graph only knows formulas that read something. A formula
+      with NO references (`=1+2`, `=1/0`, `=PI()`) has an empty precedent list,
+      which the graph treats as "not a formula cell", so it never appears in
+      any plan. Evaluate such a formula yourself, once, when it is entered
+      (its value cannot change afterwards).
       Cells whose formula did not parse are not in the graph; they just keep
       #NAME?. Do not recurse per dependency: 3,000 formulas in a chain must
       work.
