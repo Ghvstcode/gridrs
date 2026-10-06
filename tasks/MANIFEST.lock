@@ -1,0 +1,122 @@
+{
+  "lock_version": 1,
+  "spec_version": 1,
+  "manifests": [
+    {
+      "path": "tasks/0001-cell-addresses.yaml",
+      "id": "0001-cell-addresses",
+      "sha256": "171231f3484d87b1e652d26c7f63be464e722bdf0045b5f6db82cdaa99aa757e"
+    },
+    {
+      "path": "tasks/0002-values.yaml",
+      "id": "0002-values",
+      "sha256": "3fb7245b910b61c78a3833649d601018a5dc1d48c96559a5dda5c4a176205654"
+    },
+    {
+      "path": "tasks/0101-formula-lexer.yaml",
+      "id": "0101-formula-lexer",
+      "sha256": "babd23cc45188066a045fb6d4d4f4dd62c0c54754974bcf1f0dc635d2ea54bd2"
+    },
+    {
+      "path": "tasks/0102-formula-parser.yaml",
+      "id": "0102-formula-parser",
+      "sha256": "69db7c9bfd5a88516bcafd958cabb572d46f073ac0812a5afe1c47dba8460c6a"
+    },
+    {
+      "path": "tasks/0103-reference-rewriting.yaml",
+      "id": "0103-reference-rewriting",
+      "sha256": "abf1e2a11d55cb9475839daa50847264343b3d3bf6b972668b252366a6c173e3"
+    },
+    {
+      "path": "tasks/0104-evaluator.yaml",
+      "id": "0104-evaluator",
+      "sha256": "fc3fa3c85e3ac418920fdaa6f408270e98b0c7d12ea54a8c2ffb1e9674d2f3c4"
+    },
+    {
+      "path": "tasks/0201-funcs-math.yaml",
+      "id": "0201-funcs-math",
+      "sha256": "dbd2caf877950f96b04d8018636d5e21a90a8d50fd09a5edcbaf255ff1b0a9a5"
+    },
+    {
+      "path": "tasks/0202-funcs-logic.yaml",
+      "id": "0202-funcs-logic",
+      "sha256": "8c35de53182d2f9caa97dac7964a76eb662b18293b0e8657aa6e1d67d9f9d3cc"
+    },
+    {
+      "path": "tasks/0203-funcs-text.yaml",
+      "id": "0203-funcs-text",
+      "sha256": "095f811e0bc10f8807026c34a1777fc6c0feea36d9890657fedc25f655ad47ca"
+    },
+    {
+      "path": "tasks/0204-funcs-lookup.yaml",
+      "id": "0204-funcs-lookup",
+      "sha256": "7b109fc6948d54894726538e62bf1329072dff395b24087eac03436438055437"
+    },
+    {
+      "path": "tasks/0301-number-format.yaml",
+      "id": "0301-number-format",
+      "sha256": "239d489ea510df178835167d20ae8b1f6894349136be77a8c500228b8a04b7df"
+    },
+    {
+      "path": "tasks/0302-csv.yaml",
+      "id": "0302-csv",
+      "sha256": "abb4f5cef0dc8a35363c2d68dfca0732db49368361b82daec31d3aa81c8e0dd4"
+    },
+    {
+      "path": "tasks/0303-native-format.yaml",
+      "id": "0303-native-format",
+      "sha256": "276d2c0342b3327bedce93e9824891f7d645379304bb6b5e76cd7a2142431cff"
+    },
+    {
+      "path": "tasks/0401-dependency-graph.yaml",
+      "id": "0401-dependency-graph",
+      "sha256": "33004b823f042ac083685780e73a390cd7ef7c424d600edb4cfa5ff73c80b4ef"
+    },
+    {
+      "path": "tasks/0402-sheet.yaml",
+      "id": "0402-sheet",
+      "sha256": "3e9783643c166ad5a81f6f0f1b89472405b362f8b017b2bc7192d5c34053c45f"
+    },
+    {
+      "path": "tasks/0403-sheet-ops.yaml",
+      "id": "0403-sheet-ops",
+      "sha256": "221ac1d49645ca070f2a6073956d80276365dc47aabf1085873e2bb5ee48ca74"
+    },
+    {
+      "path": "tasks/0404-files.yaml",
+      "id": "0404-files",
+      "sha256": "0e3cf6e9a50f296287a05a2111d1c347fad1b12616f1fb77f91187c13a481c76"
+    },
+    {
+      "path": "tasks/0405-history.yaml",
+      "id": "0405-history",
+      "sha256": "14a7b662cfac3f845ac14740f9a3577e40a3f218b562ab20f04845cfcd56f419"
+    },
+    {
+      "path": "tasks/0501-terminal-input.yaml",
+      "id": "0501-terminal-input",
+      "sha256": "e82661ac7863f63d7459e54482f1872edad093c2ef6fcf5516c59f1ab097aea0"
+    },
+    {
+      "path": "tasks/0502-renderer.yaml",
+      "id": "0502-renderer",
+      "sha256": "08af7e0d8e01f6925d62bea300d9123a902796f4fbe2663bb123b5cb4273c9b2"
+    },
+    {
+      "path": "tasks/0503-commands.yaml",
+      "id": "0503-commands",
+      "sha256": "1cbb3ec560aefa847a841f05c9a7efe0997d8ab7ef21b8e038443626681d727c"
+    },
+    {
+      "path": "tasks/0601-app.yaml",
+      "id": "0601-app",
+      "sha256": "28f99296f26901977943d98915f2120e86582edd6811dacc82b782a19ad88287"
+    },
+    {
+      "path": "tasks/0602-cli.yaml",
+      "id": "0602-cli",
+      "sha256": "eea6ffb9d78f20a6ee441faca5ca28fad67102a4541be6a3421b363f6cbe784d"
+    }
+  ],
+  "rotations": []
+}

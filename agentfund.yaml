@@ -2,11 +2,11 @@
 spec_version: 1
 name: gridrs
 description: A terminal spreadsheet in Rust, pixel-perfect-Excel-adjacent. Zero dependencies, zero budget - every line is written by strangers' spare tokens, one signed task at a time.
-repo_url: https://github.com/OWNER/gridrs
+repo_url: https://github.com/Ghvstcode/gridrs
 ci_provider: github
 # PLACEHOLDER KEY. Replace with the output of `agentfund keygen` before signing.
 # Donors compare this key's fingerprint with the one the server shows before approving.
-pubkey: RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3
+pubkey: RWRTT4RQEL7jU92EKvKO4dkQ+2UXP4hcoctP+zolZsfFpiYVfKOZP5r0
 base_branch: main
 language: rust
 tags: [spreadsheet, tui, terminal, csv, rust, zero-dependencies]
