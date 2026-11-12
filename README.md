@@ -7,7 +7,7 @@ weekend. gridrs is being written by strangers' spare tokens: people with an AI
 coding subscription they are not using at 3 a.m. point it at this repository,
 their agent picks up one small, signed, sandboxed task, and a pull request
 appears. CI decides whether it counts. That is the whole funding model, and it
-is called [AgentFund](https://agentfund.example/).
+is called [AgentFund](https://agentfund.dev).
 
 ```
 $ gridrs --eval '=WHOPAID()'
@@ -130,24 +130,33 @@ when CI passes on that branch.
 
 ### Back it
 
-You need the `agentfund` CLI and an agent subscription you are willing to lend.
+You need the `agentfund` CLI, Docker, a logged-in `gh`, and an agent
+subscription you are willing to lend. The
+[backer guide](https://github.com/Ghvstcode/agentfund/blob/main/docs/donors.md)
+has the details.
 
 ```sh
-agentfund approve <instance>/gridrs     # shows the key fingerprint and every prompt; you confirm once
-agentfund dry-run gridrs                # optional: see which tasks you would claim, run nothing
-agentfund work gridrs                   # claim a task, run it sandboxed, push the branch, repeat
+agentfund login https://agentfund.dev              # the instance's API key (af_...), from its UI
+agentfund approve https://agentfund.dev/gridrs     # shows the key fingerprint and every prompt; you confirm once
+agentfund dry-run gridrs                           # optional: see which tasks you would claim, run nothing
+agentfund work gridrs --once --budget 4m           # one task, at most 4M tokens, then exit
 ```
+
+The maintainer key's fingerprint is
+`SHA256:90d2924be49154ce7a1f3a2aaebfa2f6867f50ae2da2c49132332be98fb9c93d`.
+When `approve` asks whether to keep working on newer commits whose task list
+is unchanged, answering yes means a merge does not send you back to `approve`.
 
 `approve` is where you look before you leap: it prints the maintainer key's
 fingerprint (compare it with the one on the project page) and every prompt
 your agent would be given. Nothing from this repository runs on your machine
 before that, and nothing outside the sandbox after it. Your own caps (a
 ceiling per task, a daily budget, a schedule) are enforced by your worker, not
-by us. A task costs between 1.5M and 4M tokens; the whole spreadsheet is 58.5M.
+by us. A task costs between 2M and 4M tokens; the whole spreadsheet is 62.5M.
 
 A brand-new project on an AgentFund instance is capped at 25M tokens of
 claims per day until its first few tasks have merged. gridrs's first layer is
-18.5M and its second 23M, so on a fresh instance the first two layers take
+20.5M and its second 25M, so on a fresh instance the first two layers take
 two days, not one. That is the cap doing its job, not a bug.
 
 ### Or just write code like it is 2019
@@ -230,7 +239,7 @@ the result will be judged. When prompt and test disagree, the test wins, and
 the prompt says so.
 
 **7. Size tasks to one sitting.**
-1.5M to 4M tokens, 20 to 45 minutes. Small enough that a failed run is a
+2M to 4M tokens, 25 to 45 minutes. Small enough that a failed run is a
 shrug, large enough to be a real unit of work (a parser, a file format, a
 renderer). The two integration tasks at the end are the largest, because
 wiring is where the surprises live.

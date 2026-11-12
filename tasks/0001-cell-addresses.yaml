@@ -89,6 +89,6 @@ scope:
     - src/addr.rs
     - ci/done/0001-cell-addresses
 verify: sh ci/check.sh 0001-cell-addresses
-max_tokens: 1500000
-timeout_minutes: 20
+max_tokens: 2500000
+timeout_minutes: 30
 depends_on: []

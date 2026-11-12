@@ -89,6 +89,6 @@ scope:
     - src/history.rs
     - ci/done/0405-history
 verify: sh ci/check.sh 0405-history
-max_tokens: 1500000
-timeout_minutes: 20
+max_tokens: 2500000
+timeout_minutes: 30
 depends_on: []

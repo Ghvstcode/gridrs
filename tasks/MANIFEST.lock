@@ -5,7 +5,7 @@
     {
       "path": "tasks/0001-cell-addresses.yaml",
       "id": "0001-cell-addresses",
-      "sha256": "171231f3484d87b1e652d26c7f63be464e722bdf0045b5f6db82cdaa99aa757e"
+      "sha256": "7f60ebda42bd409a7961b109373347fb5b39a4e7849af122fa2c02a3e317e45e"
     },
     {
       "path": "tasks/0002-values.yaml",
@@ -55,7 +55,7 @@
     {
       "path": "tasks/0301-number-format.yaml",
       "id": "0301-number-format",
-      "sha256": "239d489ea510df178835167d20ae8b1f6894349136be77a8c500228b8a04b7df"
+      "sha256": "8a9bbc611dbc93edb25e5eed5cb7b57d5a28676527e9328e723ff3dc801a8166"
     },
     {
       "path": "tasks/0302-csv.yaml",
@@ -90,7 +90,7 @@
     {
       "path": "tasks/0405-history.yaml",
       "id": "0405-history",
-      "sha256": "14a7b662cfac3f845ac14740f9a3577e40a3f218b562ab20f04845cfcd56f419"
+      "sha256": "bf7664a93bc166344fb15639586cd3d06e30802fa4f582720dc4383d5eebcd45"
     },
     {
       "path": "tasks/0501-terminal-input.yaml",
@@ -105,7 +105,7 @@
     {
       "path": "tasks/0503-commands.yaml",
       "id": "0503-commands",
-      "sha256": "1cbb3ec560aefa847a841f05c9a7efe0997d8ab7ef21b8e038443626681d727c"
+      "sha256": "256994cfdcede6b930e5daa9c3d31214235c5cd6668a3fcfe82d47b36d565848"
     },
     {
       "path": "tasks/0601-app.yaml",

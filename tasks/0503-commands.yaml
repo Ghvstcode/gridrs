@@ -95,7 +95,7 @@ scope:
     - src/command.rs
     - ci/done/0503-commands
 verify: sh ci/check.sh 0503-commands
-max_tokens: 1500000
-timeout_minutes: 20
+max_tokens: 2500000
+timeout_minutes: 30
 depends_on:
   - 0001-cell-addresses
